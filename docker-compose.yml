@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      # Swap to an external Postgres later by setting DATABASE_URL here.
+    volumes:
+      - aside-data:/data
+    restart: unless-stopped
+
+volumes:
+  aside-data:
