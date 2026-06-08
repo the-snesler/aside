@@ -23,7 +23,7 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 // Pull: client sends its checkpoint, gets back changed docs + a new checkpoint.
 app.post("/api/sync/pull", async (c) => {
   const body = await c.req.json<{
-    checkpoint?: { id: string; updatedAt: number } | null;
+    checkpoint?: { seq: number } | null;
     batchSize?: number;
   }>();
   const result = await pull({

@@ -8,7 +8,7 @@ import type { MessageDoc } from "./types.js";
  */
 export const messageSchema: RxJsonSchema<MessageDoc> = {
   title: "message schema",
-  version: 0,
+  version: 1,
   primaryKey: "id",
   type: "object",
   properties: {
@@ -20,3 +20,7 @@ export const messageSchema: RxJsonSchema<MessageDoc> = {
   },
   required: ["id", "channelId", "text", "createdAt", "updatedAt"],
 } as const;
+
+export const messageMigrationStrategies = {
+  1: (doc: MessageDoc) => doc,
+};

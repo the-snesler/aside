@@ -6,9 +6,12 @@ import {
   type RxDatabase,
 } from "rxdb";
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
+import { RxDBMigrationSchemaPlugin } from "rxdb/plugins/migration-schema";
 import { getRxStorageDexie } from "rxdb/plugins/storage-dexie";
 import { wrappedValidateAjvStorage } from "rxdb/plugins/validate-ajv";
 import { collections } from "./collections";
+
+addRxPlugin(RxDBMigrationSchemaPlugin);
 
 if (import.meta.env.DEV) {
   addRxPlugin(RxDBDevModePlugin);

@@ -3,6 +3,7 @@ import { Kysely, SqliteDialect, type Dialect } from "kysely";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { runMigrations } from "./migrations.js";
+import { initSequence } from "./sequence.js";
 import type { Database } from "./types.js";
 
 /**
@@ -38,4 +39,9 @@ export const db = new Kysely<Database>({ dialect: createDialect() });
 
 export async function initDb(): Promise<void> {
   await runMigrations(db);
+  const row = await db
+    .selectFrom("messages")
+    .select((eb) => eb.fn.max<number>("seq").as("maxSeq"))
+    .executeTakeFirst();
+  initSequence(Number(row?.maxSeq ?? 0));
 }

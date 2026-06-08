@@ -60,8 +60,8 @@ Run from the repo root:
 - **Sync protocol**: standard RxDB replication. The client `pull`s changes since
   its checkpoint, `push`es local changes (server returns conflicting master docs),
   and subscribes to an SSE `stream` so a second instance updates live. The
-  checkpoint is `(updatedAt, id)`; deletes bump `updatedAt` so they reach
-  offline clients.
+  checkpoint is a server-assigned monotonic `seq`; deletes still bump `updatedAt`
+  so conflict resolution sees them as a later client change.
 - **Soft deletes**: RxDB owns `_deleted`. It is absent from `MessageDoc` and the
   RxDB schema, and only appears on the wire via `ReplicatedMessageDoc`. SQLite
   stores it as an integer `deleted` column.

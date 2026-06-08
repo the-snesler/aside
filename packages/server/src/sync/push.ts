@@ -1,6 +1,7 @@
 import type { ReplicatedMessageDoc } from "@aside/shared";
 import { messageDocSchema } from "@aside/shared";
 import { db } from "../db/index.js";
+import { nextRev } from "../db/sequence.js";
 import { docToRow, rowToDoc } from "./row.js";
 import { emitChange } from "./stream.js";
 
@@ -17,7 +18,7 @@ export interface PushRow {
  */
 export async function push(rows: PushRow[]): Promise<ReplicatedMessageDoc[]> {
   const conflicts: ReplicatedMessageDoc[] = [];
-  const written: ReplicatedMessageDoc[] = [];
+  const written: Array<{ doc: ReplicatedMessageDoc; seq: number }> = [];
 
   for (const row of rows) {
     const doc = messageDocSchema.parse(row.newDocumentState);
@@ -34,7 +35,8 @@ export async function push(rows: PushRow[]): Promise<ReplicatedMessageDoc[]> {
       continue;
     }
 
-    const dbRow = docToRow(doc);
+    const seq = nextRev();
+    const dbRow = docToRow(doc, seq);
     await db
       .insertInto("messages")
       .values(dbRow)
@@ -44,18 +46,19 @@ export async function push(rows: PushRow[]): Promise<ReplicatedMessageDoc[]> {
           text: dbRow.text,
           created_at: dbRow.created_at,
           updated_at: dbRow.updated_at,
+          seq: dbRow.seq,
           deleted: dbRow.deleted,
         }),
       )
       .execute();
-    written.push(doc);
+    written.push({ doc, seq });
   }
 
   if (written.length > 0) {
-    const latest = written.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a));
+    const latestSeq = Math.max(...written.map((entry) => entry.seq));
     emitChange({
-      documents: written,
-      checkpoint: { id: latest.id, updatedAt: latest.updatedAt },
+      documents: written.map((entry) => entry.doc),
+      checkpoint: { seq: latestSeq },
     });
   }
 

@@ -1,4 +1,8 @@
-import { messageSchema } from "@aside/shared";
+import {
+  messageConflictHandler,
+  messageMigrationStrategies,
+  messageSchema,
+} from "@aside/shared";
 
 /**
  * Collection definitions built from the shared schema. Keeping this separate
@@ -6,5 +10,9 @@ import { messageSchema } from "@aside/shared";
  * here is mirrored by a table the server knows how to sync.
  */
 export const collections = {
-  messages: { schema: messageSchema },
+  messages: {
+    schema: messageSchema,
+    migrationStrategies: messageMigrationStrategies,
+    conflictHandler: messageConflictHandler,
+  },
 };

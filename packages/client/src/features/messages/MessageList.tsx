@@ -32,8 +32,8 @@ export function MessageList({ collection }: { collection: MessageCollection }) {
   }
 
   async function deleteMessage(doc: RxDocument<MessageDoc>) {
-    // Bump updatedAt so the soft-delete advances the replication checkpoint and
-    // reaches clients that were offline (live clients also get it via SSE).
+    // Bump updatedAt so the soft-delete wins timestamp-based conflict handling.
+    // The server assigns the replication seq when this change is pushed.
     // incrementalPatch returns the doc at its new revision; remove() must run on
     // that, not the stale `doc` reference, or RxDB throws a CONFLICT.
     const bumped = await doc.incrementalPatch({ updatedAt: Date.now() });

@@ -14,8 +14,7 @@ export interface PullResponse {
 
 /**
  * Returns documents changed since the client's checkpoint, ordered by
- * (updated_at, id) so the checkpoint is a stable cursor even when several
- * documents share an updated_at.
+ * server-assigned seq so client clock skew cannot affect sync ordering.
  */
 export async function pull(req: PullRequest): Promise<PullResponse> {
   const cp = req.checkpoint;
@@ -24,25 +23,17 @@ export async function pull(req: PullRequest): Promise<PullResponse> {
   let query = db
     .selectFrom("messages")
     .selectAll()
-    .orderBy("updated_at", "asc")
-    .orderBy("id", "asc")
+    .orderBy("seq", "asc")
     .limit(limit);
 
   if (cp) {
-    query = query.where((eb) =>
-      eb.or([
-        eb("updated_at", ">", cp.updatedAt),
-        eb.and([eb("updated_at", "=", cp.updatedAt), eb("id", ">", cp.id)]),
-      ]),
-    );
+    query = query.where("seq", ">", cp.seq);
   }
 
   const rows = await query.execute();
   const documents = rows.map(rowToDoc);
   const last = rows[rows.length - 1];
-  const checkpoint: Checkpoint | null = last
-    ? { id: last.id, updatedAt: last.updated_at }
-    : cp;
+  const checkpoint: Checkpoint | null = last ? { seq: last.seq } : cp;
 
   return { documents, checkpoint };
 }

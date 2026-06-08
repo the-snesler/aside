@@ -16,7 +16,7 @@ export interface MessageDoc {
   text: string;
   /** ms epoch */
   createdAt: number;
-  /** ms epoch — last-write-time; drives the replication pull checkpoint */
+  /** ms epoch — last-write-time; used by conflict resolution and UI sorting */
   updatedAt: number;
 }
 
@@ -24,12 +24,11 @@ export interface MessageDoc {
 export type ReplicatedMessageDoc = MessageDoc & { _deleted: boolean };
 
 /**
- * Replication checkpoint. The server orders the pull by (updatedAt, id), so the
- * checkpoint carries both to disambiguate documents sharing an updatedAt.
+ * Replication checkpoint. The server owns `seq` and uses it as the pull cursor,
+ * so sync ordering does not depend on client clocks.
  */
 export interface Checkpoint {
-  id: string;
-  updatedAt: number;
+  seq: number;
 }
 
 /** Default channel every message lands in for the POC. */

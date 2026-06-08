@@ -9,6 +9,8 @@ export interface MessagesTable {
   text: string;
   created_at: number;
   updated_at: number;
+  /** server-owned replication cursor */
+  seq: number;
   /** 0 | 1 — SQLite has no native boolean */
   deleted: number;
 }

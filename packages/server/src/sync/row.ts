@@ -14,13 +14,14 @@ export function rowToDoc(row: MessagesTable): ReplicatedMessageDoc {
 }
 
 /** Replication wire document → SQLite row. */
-export function docToRow(doc: ReplicatedMessageDoc): MessagesTable {
+export function docToRow(doc: ReplicatedMessageDoc, seq: number): MessagesTable {
   return {
     id: doc.id,
     channel_id: doc.channelId,
     text: doc.text,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
+    seq,
     deleted: doc._deleted ? 1 : 0,
   };
 }
