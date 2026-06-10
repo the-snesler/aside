@@ -1,5 +1,5 @@
 import type { RxJsonSchema } from "rxdb";
-import type { ChannelDoc, MessageDoc } from "./types.js";
+import type { AttachmentDoc, ChannelDoc, MessageDoc } from "./types.js";
 
 /**
  * RxDB JSON schema for the `messages` collection. The client builds its
@@ -46,4 +46,40 @@ export const channelSchema: RxJsonSchema<ChannelDoc> = {
 
 export const channelMigrationStrategies = {
   1: (doc: ChannelDoc) => doc,
+};
+
+/**
+ * RxDB JSON schema for the `attachments` collection. Mirrors the others:
+ * `_deleted` is RxDB-owned (absent here) and every string field declares a
+ * `maxLength`. `blobHash` is a 64-char sha256 hex digest.
+ */
+export const attachmentSchema: RxJsonSchema<AttachmentDoc> = {
+  title: "attachment schema",
+  version: 1,
+  primaryKey: "id",
+  type: "object",
+  properties: {
+    id: { type: "string", maxLength: 64 },
+    messageId: { type: "string", maxLength: 64 },
+    blobHash: { type: "string", maxLength: 64 },
+    fileName: { type: "string", maxLength: 512 },
+    mimeType: { type: "string", maxLength: 128 },
+    size: { type: "number" },
+    createdAt: { type: "number" },
+    updatedAt: { type: "number" },
+  },
+  required: [
+    "id",
+    "messageId",
+    "blobHash",
+    "fileName",
+    "mimeType",
+    "size",
+    "createdAt",
+    "updatedAt",
+  ],
+} as const;
+
+export const attachmentMigrationStrategies = {
+  1: (doc: AttachmentDoc) => doc,
 };

@@ -1,28 +1,64 @@
-import { DEFAULT_CHANNEL_ID, type MessageDoc } from "@aside/shared";
+import {
+  DEFAULT_CHANNEL_ID,
+  type AttachmentDoc,
+  type MessageDoc,
+} from "@aside/shared";
 import { useEffect, useMemo, useState } from "react";
 import type { RxDocument } from "rxdb";
 import IconCopy from "~icons/lucide/copy";
 import IconInbox from "~icons/lucide/inbox";
+import IconPaperclip from "~icons/lucide/paperclip";
 import IconPencil from "~icons/lucide/pencil";
 import IconTrash from "~icons/lucide/trash-2";
-import type { ChannelCollection, MessageCollection } from "../../db/database";
+import IconX from "~icons/lucide/x";
+import type {
+  AttachmentCollection,
+  ChannelCollection,
+  MessageCollection,
+} from "../../db/database";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
 import { HOME_ID } from "../channels/home";
+import { blobUrl, uploadBlob } from "../attachments/api";
 import { Markdown } from "./Markdown";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 interface Props {
   messages: MessageCollection;
   channels: ChannelCollection;
+  attachments: AttachmentCollection;
   channelId: string;
 }
 
-export function MessageList({ messages, channels, channelId }: Props) {
+/** A file being uploaded for the next send (ATT-3). */
+interface PendingAttachment {
+  tempId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  /** object URL for an instant local thumbnail */
+  localUrl: string;
+  status: "uploading" | "done" | "error";
+  /** content hash, set once the upload resolves */
+  hash?: string;
+}
+
+export function MessageList({
+  messages,
+  channels,
+  attachments,
+  channelId,
+}: Props) {
   const isHome = channelId === HOME_ID;
   const [docs, setDocs] = useState<RxDocument<MessageDoc>[]>([]);
   const [channelNames, setChannelNames] = useState<Map<string, string>>(
     new Map(),
   );
+  // messageId → its attachments, for the cards rendered below each note.
+  const [attachmentsByMessage, setAttachmentsByMessage] = useState<
+    Map<string, RxDocument<AttachmentDoc>[]>
+  >(new Map());
+  // Files staged for the next send.
+  const [pending, setPending] = useState<PendingAttachment[]>([]);
   // Bumped after each successful send to remount (and so clear + refocus) the
   // composer editor, which owns its own draft.
   const [composerKey, setComposerKey] = useState(0);
@@ -50,38 +86,127 @@ export function MessageList({ messages, channels, channelId }: Props) {
     return () => sub.unsubscribe();
   }, [channels]);
 
+  useEffect(() => {
+    // Group every attachment by its message so each row can render its cards.
+    const sub = attachments.find().$.subscribe((found) => {
+      const map = new Map<string, RxDocument<AttachmentDoc>[]>();
+      for (const a of found) {
+        const list = map.get(a.messageId);
+        if (list) list.push(a);
+        else map.set(a.messageId, [a]);
+      }
+      setAttachmentsByMessage(map);
+    });
+    return () => sub.unsubscribe();
+  }, [attachments]);
+
   const groups = useMemo(() => groupByDay(docs), [docs]);
   const headerName = isHome
     ? "Home"
     : (channelNames.get(channelId) ?? channelId);
 
+  function addFiles(files: File[]) {
+    // ATT-3: stage each file with an instant local thumbnail, then upload its
+    // bytes in the background. The returned hash is what links to the blob.
+    for (const file of files) {
+      const tempId = crypto.randomUUID();
+      setPending((prev) => [
+        ...prev,
+        {
+          tempId,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          localUrl: URL.createObjectURL(file),
+          status: "uploading",
+        },
+      ]);
+      void uploadBlob(file)
+        .then(({ hash }) => {
+          setPending((prev) =>
+            prev.map((item) =>
+              item.tempId === tempId ? { ...item, status: "done", hash } : item,
+            ),
+          );
+        })
+        .catch(() => {
+          setPending((prev) =>
+            prev.map((item) =>
+              item.tempId === tempId ? { ...item, status: "error" } : item,
+            ),
+          );
+        });
+    }
+  }
+
+  function removePending(tempId: string) {
+    setPending((prev) => {
+      const item = prev.find((p) => p.tempId === tempId);
+      if (item) URL.revokeObjectURL(item.localUrl);
+      return prev.filter((p) => p.tempId !== tempId);
+    });
+  }
+
+  function clearPending() {
+    setPending((prev) => {
+      for (const item of prev) URL.revokeObjectURL(item.localUrl);
+      return [];
+    });
+  }
+
   async function handleSend(raw: string) {
     const trimmed = raw.trim();
-    if (!trimmed) return;
+    // Only attachments whose upload has finished can be linked; in-flight ones
+    // are dropped (uploads are fast; the user can re-send if needed).
+    const ready = pending.filter(
+      (p): p is PendingAttachment & { hash: string } =>
+        p.status === "done" && !!p.hash,
+    );
+    if (!trimmed && ready.length === 0) return;
 
     // CH-4: a #tag files the note in an existing channel of that name and is
     // stripped from the saved text. With no match the note stays in the current
     // view (or #general from Home) and the tag is kept as plain text.
     let targetChannelId = isHome ? DEFAULT_CHANNEL_ID : channelId;
     let body = trimmed;
-    const tag = parseChannelTag(trimmed);
-    if (tag) {
-      const tagged = await channels.findOne({ selector: { name: tag } }).exec();
-      if (tagged) {
-        targetChannelId = tagged.id;
-        body = stripChannelTag(trimmed, tag);
+    if (trimmed) {
+      const tag = parseChannelTag(trimmed);
+      if (tag) {
+        const tagged = await channels
+          .findOne({ selector: { name: tag } })
+          .exec();
+        if (tagged) {
+          targetChannelId = tagged.id;
+          body = stripChannelTag(trimmed, tag);
+        }
       }
     }
-    if (!body) return; // the message was only the tag — nothing to save
+    // The message was only a #tag and carries no attachments — nothing to save.
+    if (!body && ready.length === 0) return;
 
     const now = Date.now();
+    // Generate the message id up front so the attachment rows can link to it.
+    const messageId = crypto.randomUUID();
     await messages.insert({
-      id: crypto.randomUUID(),
+      id: messageId,
       channelId: targetChannelId,
       text: body,
       createdAt: now,
       updatedAt: now,
     });
+    for (const item of ready) {
+      await attachments.insert({
+        id: crypto.randomUUID(),
+        messageId,
+        blobHash: item.hash,
+        fileName: item.fileName,
+        mimeType: item.mimeType,
+        size: item.size,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    clearPending();
     // Remount the composer to clear it and put the caret back.
     setComposerKey((k) => k + 1);
   }
@@ -185,10 +310,17 @@ export function MessageList({ messages, channels, channelId }: Props) {
                         </div>
                       </div>
                     ) : (
-                      <Markdown
-                        text={doc.text}
-                        className="min-w-0 flex-1 break-words text-ink"
-                      />
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        {doc.text && (
+                          <Markdown
+                            text={doc.text}
+                            className="break-words text-ink"
+                          />
+                        )}
+                        <AttachmentCards
+                          items={attachmentsByMessage.get(doc.id)}
+                        />
+                      </div>
                     )}
                     {!isEditing && (
                       <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-1 rounded bg-rail px-1 py-0.5 shadow group-hover:flex">
@@ -227,17 +359,100 @@ export function MessageList({ messages, channels, channelId }: Props) {
       </div>
 
       <div className="shrink-0 px-4 pb-4">
+        {pending.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pending.map((item) => (
+              <div key={item.tempId} className="relative h-16 w-16">
+                {item.mimeType.startsWith("image/") ? (
+                  <img
+                    src={item.localUrl}
+                    alt={item.fileName}
+                    className="h-16 w-16 rounded border border-divider object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded border border-divider bg-rail text-muted">
+                    <IconPaperclip className="h-5 w-5" />
+                  </div>
+                )}
+                {item.status !== "done" && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-xs text-white">
+                    {item.status === "uploading" ? "…" : "!"}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removePending(item.tempId)}
+                  aria-label="Remove attachment"
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-rail p-0.5 text-muted shadow hover:text-ink"
+                >
+                  <IconX className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <MarkdownEditor
           key={composerKey}
           initialValue=""
           autoFocus
           placeholder={isHome ? "Jot a note…" : `Message #${headerName}`}
           onSubmit={(t) => void handleSend(t)}
+          onAddFiles={addFiles}
           className="max-h-[50vh] w-full overflow-y-auto rounded-lg bg-rail px-4 py-3 text-ink outline-none focus:ring-1 focus:ring-accent"
         />
       </div>
     </main>
   );
+}
+
+/**
+ * Renders a message's attachments below its body (ATT-3): images as inline
+ * preview cards (linking to the full blob), other files as a download chip.
+ */
+function AttachmentCards({ items }: { items?: RxDocument<AttachmentDoc>[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-2">
+      {items.map((a) =>
+        a.mimeType.startsWith("image/") ? (
+          <a
+            key={a.id}
+            href={blobUrl(a.blobHash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+          >
+            <img
+              src={blobUrl(a.blobHash)}
+              alt={a.fileName}
+              loading="lazy"
+              className="max-h-80 max-w-xs rounded-lg border border-divider object-cover"
+            />
+          </a>
+        ) : (
+          <a
+            key={a.id}
+            href={blobUrl(a.blobHash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg border border-divider bg-rail px-3 py-2 text-sm text-ink hover:bg-hover"
+          >
+            <IconPaperclip className="h-4 w-4 shrink-0 text-muted" />
+            <span className="max-w-[12rem] truncate">{a.fileName}</span>
+            <span className="shrink-0 text-xs text-muted">
+              {formatSize(a.size)}
+            </span>
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 interface DayGroup {

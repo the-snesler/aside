@@ -27,6 +27,41 @@ export interface ChannelsTable {
 }
 
 /**
+ * Attachment metadata, synced through the same protocol as messages/channels
+ * (hence `seq`/`deleted`). The bytes themselves live in the blob store, not
+ * here; this row just links a message to a blob by hash.
+ */
+export interface AttachmentsTable {
+  id: string;
+  message_id: string;
+  /** sha256 hex — the content-addressed key into the blob store */
+  blob_hash: string;
+  file_name: string;
+  mime_type: string;
+  size: number;
+  created_at: number;
+  updated_at: number;
+  /** server-owned replication cursor */
+  seq: number;
+  /** 0 | 1 — SQLite has no native boolean */
+  deleted: number;
+}
+
+/**
+ * Server-only blob metadata. NOT synced (no `seq`/`deleted`) — it backs the
+ * download endpoint's `Content-Type` and seeds future GC/refcounting. The bytes
+ * live in the blob store keyed by `hash`; the client reaches them over the
+ * separate `/api/blobs/:hash` route, not the sync stream.
+ */
+export interface BlobsTable {
+  /** sha256 hex content address (primary key) */
+  hash: string;
+  content_type: string;
+  size: number;
+  created_at: number;
+}
+
+/**
  * Server-only feed configuration. NOT synced through RxDB — credentials and
  * per-source state must never enter the sync stream — so it has no `seq`/
  * `deleted`. `config` and `cursor` are JSON-encoded text blobs.
@@ -58,5 +93,7 @@ export interface FeedSourcesTable {
 export interface Database {
   messages: MessagesTable;
   channels: ChannelsTable;
+  attachments: AttachmentsTable;
+  blobs: BlobsTable;
   feed_sources: FeedSourcesTable;
 }

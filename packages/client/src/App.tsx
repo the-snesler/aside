@@ -18,6 +18,10 @@ export function App() {
       await ensureDefaultChannel(database);
       startReplication({ collection: database.messages, name: "messages" });
       startReplication({ collection: database.channels, name: "channels" });
+      startReplication({
+        collection: database.attachments,
+        name: "attachments",
+      });
       setDb(database);
     });
     return () => {
@@ -43,6 +47,7 @@ export function App() {
       <MessageList
         messages={db.messages}
         channels={db.channels}
+        attachments={db.attachments}
         channelId={channelId}
       />
     </div>

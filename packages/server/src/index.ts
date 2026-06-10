@@ -3,7 +3,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import { initDb } from "./db/index.js";
+import { getBlobDriver, sha256 } from "./blobs/index.js";
+import { db, initDb } from "./db/index.js";
 import {
   createFeed,
   deleteFeed,
@@ -21,6 +22,7 @@ import {
   startFeedScheduler,
   stopFeed,
 } from "./feeds/scheduler.js";
+import { attachmentsSync } from "./sync/attachments.js";
 import { channelsSync } from "./sync/channels.js";
 import type { ReplicatedDoc, SyncCollection } from "./sync/collection.js";
 import { messagesSync } from "./sync/messages.js";
@@ -92,6 +94,71 @@ function registerSyncRoutes<TDoc extends ReplicatedDoc>(
 
 registerSyncRoutes(messagesSync);
 registerSyncRoutes(channelsSync);
+registerSyncRoutes(attachmentsSync);
+
+/**
+ * Blob bytes (ATT-2). Content-addressed by sha256 and kept OFF the RxDB sync
+ * path — the heavy bytes travel over plain fetch, while the lightweight
+ * attachment metadata rides the normal `attachments` sync stream. Uploads dedupe
+ * on content hash; the `:hash` URL is immutable, so it caches forever.
+ */
+const MAX_BLOB_BYTES = 25 * 1024 * 1024;
+
+app.post("/api/blobs", async (c) => {
+  const declared = Number(c.req.header("content-length") ?? 0);
+  if (declared > MAX_BLOB_BYTES) {
+    return c.json({ error: "file too large" }, 413);
+  }
+  const buf = Buffer.from(await c.req.arrayBuffer());
+  if (buf.byteLength === 0) {
+    return c.json({ error: "empty body" }, 400);
+  }
+  if (buf.byteLength > MAX_BLOB_BYTES) {
+    return c.json({ error: "file too large" }, 413);
+  }
+
+  const contentType =
+    c.req.header("content-type") || "application/octet-stream";
+  const hash = sha256(buf);
+  // Content-addressed: put() is a no-op if the bytes are already stored.
+  await getBlobDriver().put(hash, buf);
+  await db
+    .insertInto("blobs")
+    .values({
+      hash,
+      content_type: contentType,
+      size: buf.byteLength,
+      created_at: Date.now(),
+    })
+    .onConflict((oc) => oc.column("hash").doNothing())
+    .execute();
+
+  return c.json({ hash, size: buf.byteLength }, 201);
+});
+
+app.get("/api/blobs/:hash", async (c) => {
+  const hash = c.req.param("hash");
+  const meta = await db
+    .selectFrom("blobs")
+    .selectAll()
+    .where("hash", "=", hash)
+    .executeTakeFirst();
+  if (!meta) return c.json({ error: "not found" }, 404);
+
+  const bytes = await getBlobDriver().get(hash);
+  if (!bytes) return c.json({ error: "not found" }, 404);
+
+  // Copy into a fresh Uint8Array so the body type satisfies BodyInit (a Node
+  // Buffer is backed by ArrayBufferLike, which the web Response type rejects).
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      "content-type": meta.content_type,
+      "content-length": String(meta.size),
+      // The URL is the content hash, so the bytes can never change.
+      "cache-control": "public, max-age=31536000, immutable",
+    },
+  });
+});
 
 /**
  * Feeds API. Server-only configuration (credentials, schedules, cursors), kept

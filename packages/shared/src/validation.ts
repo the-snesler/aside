@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { ReplicatedChannelDoc, ReplicatedMessageDoc } from "./types.js";
+import type {
+  ReplicatedAttachmentDoc,
+  ReplicatedChannelDoc,
+  ReplicatedMessageDoc,
+} from "./types.js";
 
 /**
  * Zod mirror of {@link ReplicatedMessageDoc} (document fields + `_deleted`). The
@@ -23,3 +27,18 @@ export const channelDocSchema: z.ZodType<ReplicatedChannelDoc> = z.object({
   updatedAt: z.number(),
   _deleted: z.boolean(),
 });
+
+/** Zod mirror of {@link ReplicatedAttachmentDoc}; the attachment push-boundary guard. */
+export const attachmentDocSchema: z.ZodType<ReplicatedAttachmentDoc> = z.object(
+  {
+    id: z.string().min(1).max(64),
+    messageId: z.string().min(1).max(64),
+    blobHash: z.string().min(1).max(64),
+    fileName: z.string().min(1).max(512),
+    mimeType: z.string().min(1).max(128),
+    size: z.number().int().nonnegative(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+    _deleted: z.boolean(),
+  },
+);

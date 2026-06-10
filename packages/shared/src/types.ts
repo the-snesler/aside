@@ -44,6 +44,35 @@ export interface ChannelDoc {
 export type ReplicatedChannelDoc = ChannelDoc & { _deleted: boolean };
 
 /**
+ * An attachment links a message to a blob (file bytes) held by the server's blob
+ * store, addressed by its sha256 hash. Only the *metadata* syncs through RxDB;
+ * the bytes are fetched on demand from `/api/blobs/:hash`. Like {@link MessageDoc},
+ * `_deleted` is RxDB-owned and omitted here — it rides the wire via
+ * {@link ReplicatedAttachmentDoc}.
+ */
+export interface AttachmentDoc {
+  /** uuid */
+  id: string;
+  /** the message this attachment hangs off of */
+  messageId: string;
+  /** sha256 hex of the bytes — the content-addressed key into the blob store */
+  blobHash: string;
+  /** original filename, for display + download */
+  fileName: string;
+  /** MIME type, e.g. "image/png" */
+  mimeType: string;
+  /** byte length */
+  size: number;
+  /** ms epoch */
+  createdAt: number;
+  /** ms epoch — last-write-time; used by conflict resolution and UI sorting */
+  updatedAt: number;
+}
+
+/** An attachment as it travels over the sync protocol, carrying RxDB's soft-delete flag. */
+export type ReplicatedAttachmentDoc = AttachmentDoc & { _deleted: boolean };
+
+/**
  * Replication checkpoint. The server owns `seq` and uses it as the pull cursor,
  * so sync ordering does not depend on client clocks. Each collection tracks its
  * own checkpoint.

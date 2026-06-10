@@ -1,5 +1,5 @@
 import type { RxConflictHandler } from "rxdb";
-import type { ChannelDoc, MessageDoc } from "./types.js";
+import type { AttachmentDoc, ChannelDoc, MessageDoc } from "./types.js";
 
 /**
  * Builds a deterministic last-write-wins conflict handler for any collection
@@ -53,3 +53,5 @@ function stableKey(doc: object): string {
 
 export const messageConflictHandler = createLwwConflictHandler<MessageDoc>();
 export const channelConflictHandler = createLwwConflictHandler<ChannelDoc>();
+export const attachmentConflictHandler =
+  createLwwConflictHandler<AttachmentDoc>();
