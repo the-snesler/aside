@@ -39,9 +39,18 @@ export const db = new Kysely<Database>({ dialect: createDialect() });
 
 export async function initDb(): Promise<void> {
   await runMigrations(db);
-  const row = await db
+
+  // Prime each collection's seq counter from its table so server restarts keep
+  // assigning monotonically increasing cursors.
+  const messagesMax = await db
     .selectFrom("messages")
     .select((eb) => eb.fn.max<number>("seq").as("maxSeq"))
     .executeTakeFirst();
-  initSequence(Number(row?.maxSeq ?? 0));
+  initSequence("messages", Number(messagesMax?.maxSeq ?? 0));
+
+  const channelsMax = await db
+    .selectFrom("channels")
+    .select((eb) => eb.fn.max<number>("seq").as("maxSeq"))
+    .executeTakeFirst();
+  initSequence("channels", Number(channelsMax?.maxSeq ?? 0));
 }

@@ -1,26 +1,29 @@
-import type { Checkpoint, ReplicatedMessageDoc } from "@aside/shared";
+import type { Checkpoint } from "@aside/shared";
 import { EventEmitter } from "node:events";
 
 export interface SyncEvent {
-  documents: ReplicatedMessageDoc[];
+  documents: unknown[];
   checkpoint: Checkpoint;
 }
 
 /**
  * In-process fan-out from push handlers to open SSE connections. Single
  * container, single process, so an EventEmitter is all the pub/sub we need.
+ * Events are namespaced by collection name so each collection's stream only
+ * receives its own changes.
  */
 const emitter = new EventEmitter();
 emitter.setMaxListeners(0);
 
-const CHANGE = "change";
-
-export function emitChange(event: SyncEvent): void {
-  emitter.emit(CHANGE, event);
+export function emitChange(collection: string, event: SyncEvent): void {
+  emitter.emit(collection, event);
 }
 
-/** Subscribe to changes; returns an unsubscribe function. */
-export function onChange(listener: (event: SyncEvent) => void): () => void {
-  emitter.on(CHANGE, listener);
-  return () => emitter.off(CHANGE, listener);
+/** Subscribe to one collection's changes; returns an unsubscribe function. */
+export function onChange(
+  collection: string,
+  listener: (event: SyncEvent) => void,
+): () => void {
+  emitter.on(collection, listener);
+  return () => emitter.off(collection, listener);
 }

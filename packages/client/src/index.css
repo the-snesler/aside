@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/*
+ * Discord-inspired dark palette. Each token becomes a Tailwind color utility,
+ * e.g. `--color-sidebar` → `bg-sidebar` / `text-sidebar` / `border-sidebar`.
+ */
+@theme {
+  --color-rail: #1e1f22;
+  --color-sidebar: #2b2d31;
+  --color-chat: #313338;
+  --color-panel: #2b2d31;
+  --color-hover: #35373c;
+  --color-active: #404249;
+  --color-divider: #3f4147;
+  --color-accent: #5865f2;
+  --color-ink: #dbdee1;
+  --color-muted: #949ba4;
+  --color-danger: #f23f43;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-chat);
+    color: var(--color-ink);
+    font-family:
+      system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
+  }
+}

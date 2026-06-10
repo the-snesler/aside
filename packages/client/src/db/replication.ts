@@ -1,27 +1,34 @@
-import type { Checkpoint, MessageDoc } from "@aside/shared";
-import type { RxReplicationPullStreamItem } from "rxdb";
+import type { Checkpoint } from "@aside/shared";
+import type { RxCollection, RxReplicationPullStreamItem } from "rxdb";
 import { replicateRxCollection } from "rxdb/plugins/replication";
 import { Subject } from "rxjs";
-import type { MessageCollection } from "./database";
 
-type PullStreamItem = RxReplicationPullStreamItem<MessageDoc, Checkpoint>;
-
-let started = false;
+// One replication per collection name; guard against React re-renders starting
+// duplicates (each would open a second SSE connection).
+const started = new Set<string>();
 
 /**
- * Wires the messages collection to the server's pull/push/stream endpoints.
+ * Wires a collection to the server's pull/push/stream endpoints under
+ * `/api/sync/<name>/*`:
  * - pull.handler fetches changes since the last checkpoint.
  * - pull.stream$ is fed by an SSE connection so a second instance updates live.
  * - push.handler ships local changes and returns any conflicts.
- * Guarded so it only runs once even if React re-renders.
+ *
+ * The same protocol drives every collection — only the `name` (route segment +
+ * replication identifier) differs.
  */
-export function startReplication(collection: MessageCollection): void {
-  if (started) return;
-  started = true;
+export function startReplication<TDoc>(options: {
+  collection: RxCollection<TDoc>;
+  name: string;
+}): void {
+  const { collection, name } = options;
+  if (started.has(name)) return;
+  started.add(name);
 
+  type PullStreamItem = RxReplicationPullStreamItem<TDoc, Checkpoint>;
   const pullStream$ = new Subject<PullStreamItem>();
 
-  const events = new EventSource("/api/sync/stream");
+  const events = new EventSource(`/api/sync/${name}/stream`);
   events.onmessage = (event) => {
     if (!event.data) return;
     pullStream$.next(JSON.parse(event.data) as PullStreamItem);
@@ -31,14 +38,14 @@ export function startReplication(collection: MessageCollection): void {
     pullStream$.next("RESYNC");
   };
 
-  replicateRxCollection<MessageDoc, Checkpoint>({
+  replicateRxCollection<TDoc, Checkpoint>({
     collection,
-    replicationIdentifier: "aside-messages-http",
+    replicationIdentifier: `aside-${name}-http`,
     live: true,
     retryTime: 5000,
     pull: {
       async handler(checkpoint, batchSize) {
-        const res = await fetch("/api/sync/pull", {
+        const res = await fetch(`/api/sync/${name}/pull`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ checkpoint: checkpoint ?? null, batchSize }),
@@ -50,7 +57,7 @@ export function startReplication(collection: MessageCollection): void {
     },
     push: {
       async handler(rows) {
-        const res = await fetch("/api/sync/push", {
+        const res = await fetch(`/api/sync/${name}/push`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(rows),

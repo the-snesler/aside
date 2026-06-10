@@ -1,4 +1,7 @@
 import {
+  channelConflictHandler,
+  channelMigrationStrategies,
+  channelSchema,
   messageConflictHandler,
   messageMigrationStrategies,
   messageSchema,
@@ -14,5 +17,10 @@ export const collections = {
     schema: messageSchema,
     migrationStrategies: messageMigrationStrategies,
     conflictHandler: messageConflictHandler,
+  },
+  channels: {
+    schema: channelSchema,
+    migrationStrategies: channelMigrationStrategies,
+    conflictHandler: channelConflictHandler,
   },
 };

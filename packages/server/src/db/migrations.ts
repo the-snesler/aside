@@ -28,6 +28,26 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .on("messages")
     .column("seq")
     .execute();
+
+  // Channels sync through the same protocol, so they get the same shape: a
+  // server-owned seq cursor and a soft-delete flag. New table — no backfill.
+  await db.schema
+    .createTable("channels")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("name", "text", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
+    .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
+    .execute();
+
+  await db.schema
+    .createIndex("channels_seq")
+    .ifNotExists()
+    .on("channels")
+    .column("seq")
+    .execute();
 }
 
 async function ensureSeqColumn(db: Kysely<Database>): Promise<void> {
@@ -60,6 +80,10 @@ async function backfillSeq(db: Kysely<Database>): Promise<void> {
 
   for (const row of rows) {
     seq += 1;
-    await db.updateTable("messages").set({ seq }).where("id", "=", row.id).execute();
+    await db
+      .updateTable("messages")
+      .set({ seq })
+      .where("id", "=", row.id)
+      .execute();
   }
 }

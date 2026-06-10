@@ -13,9 +13,15 @@ const base: ReplicatedMessageDoc = {
 
 describe("messageConflictHandler", () => {
   it("detects equal replicated message states", () => {
-    expect(messageConflictHandler.isEqual(base, { ...base }, "test")).toBe(true);
+    expect(messageConflictHandler.isEqual(base, { ...base }, "test")).toBe(
+      true,
+    );
     expect(
-      messageConflictHandler.isEqual(base, { ...base, text: "changed" }, "test"),
+      messageConflictHandler.isEqual(
+        base,
+        { ...base, text: "changed" },
+        "test",
+      ),
     ).toBe(false);
   });
 

@@ -1,4 +1,4 @@
-import type { MessageDoc } from "@aside/shared";
+import type { ChannelDoc, MessageDoc } from "@aside/shared";
 import {
   addRxPlugin,
   createRxDatabase,
@@ -24,8 +24,10 @@ const storage = import.meta.env.DEV
   : getRxStorageDexie();
 
 export type MessageCollection = RxCollection<MessageDoc>;
+export type ChannelCollection = RxCollection<ChannelDoc>;
 export interface AsideCollections {
   messages: MessageCollection;
+  channels: ChannelCollection;
 }
 export type AsideDatabase = RxDatabase<AsideCollections>;
 

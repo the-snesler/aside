@@ -15,6 +15,18 @@ export interface MessagesTable {
   deleted: number;
 }
 
+export interface ChannelsTable {
+  id: string;
+  name: string;
+  created_at: number;
+  updated_at: number;
+  /** server-owned replication cursor */
+  seq: number;
+  /** 0 | 1 — SQLite has no native boolean */
+  deleted: number;
+}
+
 export interface Database {
   messages: MessagesTable;
+  channels: ChannelsTable;
 }
