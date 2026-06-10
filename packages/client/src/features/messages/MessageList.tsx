@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { RxDocument } from "rxdb";
 import IconCopy from "~icons/lucide/copy";
 import IconInbox from "~icons/lucide/inbox";
+import IconPencil from "~icons/lucide/pencil";
 import IconTrash from "~icons/lucide/trash-2";
 import type { ChannelCollection, MessageCollection } from "../../db/database";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
 import { HOME_ID } from "../channels/home";
+import { Markdown } from "./Markdown";
 
 interface Props {
   messages: MessageCollection;
@@ -21,6 +23,9 @@ export function MessageList({ messages, channels, channelId }: Props) {
     new Map(),
   );
   const [text, setText] = useState("");
+  // EDIT-1: which row is open for editing, and its working copy.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
 
   useEffect(() => {
     // Load all, then filter (Home shows every channel) + sort in JS. Matches the
@@ -90,6 +95,29 @@ export function MessageList({ messages, channels, channelId }: Props) {
     await bumped.remove();
   }
 
+  function startEdit(doc: RxDocument<MessageDoc>) {
+    setEditingId(doc.id);
+    setEditDraft(doc.text);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft("");
+  }
+
+  async function saveEdit(doc: RxDocument<MessageDoc>) {
+    // EDIT-1: write text + a fresh updatedAt through the normal replication
+    // path; the bumped timestamp makes the edit win LWW conflict resolution.
+    // Empty or unchanged is a no-op (delete has its own button).
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed === doc.text) {
+      cancelEdit();
+      return;
+    }
+    await doc.incrementalPatch({ text: trimmed, updatedAt: Date.now() });
+    cancelEdit();
+  }
+
   return (
     <main className="flex h-full min-h-0 flex-col bg-chat">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4 font-semibold shadow-sm">
@@ -119,42 +147,99 @@ export function MessageList({ messages, channels, channelId }: Props) {
               <span className="h-px flex-1 bg-divider" />
             </div>
             <ul className="flex flex-col">
-              {group.docs.map((doc) => (
-                <li
-                  key={doc.id}
-                  className="group relative flex gap-3 rounded px-2 py-1 hover:bg-hover"
-                >
-                  <span className="w-12 shrink-0 pt-0.5 text-right text-xs text-muted">
-                    {formatTime(doc.createdAt)}
-                  </span>
-                  {isHome && (
-                    <span className="mt-px shrink-0 self-start rounded bg-active px-1.5 py-0.5 text-[11px] text-muted">
-                      #{channelNames.get(doc.channelId) ?? "unknown"}
+              {group.docs.map((doc) => {
+                const isEditing = editingId === doc.id;
+                return (
+                  <li
+                    key={doc.id}
+                    className="group relative flex gap-3 rounded px-2 py-1 hover:bg-hover"
+                  >
+                    <span className="w-12 shrink-0 pt-0.5 text-right text-xs text-muted">
+                      {formatTime(doc.createdAt)}
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-ink">
-                    {doc.text}
-                  </span>
-                  <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-1 rounded bg-rail px-1 py-0.5 shadow group-hover:flex">
-                    <button
-                      type="button"
-                      onClick={() => void copyMessage(doc)}
-                      aria-label="Copy"
-                      className="rounded p-1 text-muted hover:text-ink"
-                    >
-                      <IconCopy className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteMessage(doc)}
-                      aria-label="Delete"
-                      className="rounded p-1 text-muted hover:text-danger"
-                    >
-                      <IconTrash className="h-4 w-4" />
-                    </button>
-                  </span>
-                </li>
-              ))}
+                    {isHome && (
+                      <span className="mt-px shrink-0 self-start rounded bg-active px-1.5 py-0.5 text-[11px] text-muted">
+                        #{channelNames.get(doc.channelId) ?? "unknown"}
+                      </span>
+                    )}
+                    {isEditing ? (
+                      <div className="min-w-0 flex-1">
+                        <textarea
+                          autoFocus
+                          value={editDraft}
+                          onChange={(e) => setEditDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            // Enter saves, Shift+Enter inserts a newline, Esc bails.
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEdit();
+                            } else if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              void saveEdit(doc);
+                            }
+                          }}
+                          rows={Math.min(
+                            12,
+                            Math.max(1, editDraft.split("\n").length),
+                          )}
+                          className="w-full resize-none rounded-lg bg-rail px-3 py-2 text-ink outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        <div className="mt-1 text-xs text-muted">
+                          escape to{" "}
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="text-accent hover:underline"
+                          >
+                            cancel
+                          </button>{" "}
+                          • enter to{" "}
+                          <button
+                            type="button"
+                            onClick={() => void saveEdit(doc)}
+                            className="text-accent hover:underline"
+                          >
+                            save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Markdown
+                        text={doc.text}
+                        className="min-w-0 flex-1 break-words text-ink"
+                      />
+                    )}
+                    {!isEditing && (
+                      <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-1 rounded bg-rail px-1 py-0.5 shadow group-hover:flex">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(doc)}
+                          aria-label="Edit"
+                          className="rounded p-1 text-muted hover:text-ink"
+                        >
+                          <IconPencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void copyMessage(doc)}
+                          aria-label="Copy"
+                          className="rounded p-1 text-muted hover:text-ink"
+                        >
+                          <IconCopy className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteMessage(doc)}
+                          aria-label="Delete"
+                          className="rounded p-1 text-muted hover:text-danger"
+                        >
+                          <IconTrash className="h-4 w-4" />
+                        </button>
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ))}

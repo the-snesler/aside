@@ -34,3 +34,183 @@
       sans-serif;
   }
 }
+
+/*
+ * Markdown message bodies (MD-1). Scoped to `.message-md` so chat chrome is
+ * untouched. Kept tight — first/last child margins are collapsed so a one-line
+ * note still reads as a single line. The `.hljs-*` block is an inline, on-brand
+ * code theme (rehype-highlight emits the classes; we ship no highlight.js CSS).
+ */
+@layer components {
+  .message-md {
+    line-height: 1.5;
+  }
+  .message-md > :first-child {
+    margin-top: 0;
+  }
+  .message-md > :last-child {
+    margin-bottom: 0;
+  }
+
+  .message-md p {
+    margin: 0.25rem 0;
+  }
+
+  .message-md h1,
+  .message-md h2,
+  .message-md h3,
+  .message-md h4 {
+    margin: 0.75rem 0 0.35rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .message-md h1 {
+    font-size: 1.35rem;
+  }
+  .message-md h2 {
+    font-size: 1.2rem;
+  }
+  .message-md h3 {
+    font-size: 1.08rem;
+  }
+  .message-md h4 {
+    font-size: 1rem;
+  }
+
+  .message-md a {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+
+  .message-md ul,
+  .message-md ol {
+    margin: 0.25rem 0;
+    padding-left: 1.5rem;
+  }
+  .message-md ul {
+    list-style: disc;
+  }
+  .message-md ol {
+    list-style: decimal;
+  }
+  .message-md li {
+    margin: 0.1rem 0;
+  }
+  /* GFM task lists: drop the bullet, keep the checkbox aligned. */
+  .message-md li:has(> input[type="checkbox"]) {
+    list-style: none;
+    margin-left: -1.25rem;
+  }
+  .message-md input[type="checkbox"] {
+    margin-right: 0.4rem;
+  }
+
+  .message-md blockquote {
+    margin: 0.35rem 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--color-divider);
+    color: var(--color-muted);
+  }
+
+  .message-md hr {
+    margin: 0.75rem 0;
+    border: 0;
+    border-top: 1px solid var(--color-divider);
+  }
+
+  /* Inline code. */
+  .message-md code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.875em;
+    background-color: var(--color-rail);
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+  }
+
+  /* Fenced block: the <pre> carries the surface; reset the inner <code>. */
+  .message-md pre {
+    margin: 0.4rem 0;
+    padding: 0.75rem 0.9rem;
+    background-color: var(--color-rail);
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+  .message-md pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  /* GFM tables. */
+  .message-md table {
+    border-collapse: collapse;
+    margin: 0.4rem 0;
+    font-size: 0.9em;
+  }
+  .message-md th,
+  .message-md td {
+    border: 1px solid var(--color-divider);
+    padding: 0.3rem 0.6rem;
+    text-align: left;
+  }
+  .message-md th {
+    background-color: var(--color-hover);
+  }
+
+  /* highlight.js token palette, tuned to the dark Discord chrome. */
+  .message-md .hljs-comment,
+  .message-md .hljs-quote {
+    color: #7a8290;
+    font-style: italic;
+  }
+  .message-md .hljs-keyword,
+  .message-md .hljs-selector-tag,
+  .message-md .hljs-literal,
+  .message-md .hljs-section {
+    color: #ff7b72;
+  }
+  .message-md .hljs-string,
+  .message-md .hljs-regexp,
+  .message-md .hljs-meta .hljs-string {
+    color: #a5d6ff;
+  }
+  .message-md .hljs-number,
+  .message-md .hljs-symbol,
+  .message-md .hljs-bullet {
+    color: #79c0ff;
+  }
+  .message-md .hljs-title,
+  .message-md .hljs-title.function_,
+  .message-md .hljs-title.class_ {
+    color: #d2a8ff;
+  }
+  .message-md .hljs-built_in,
+  .message-md .hljs-type {
+    color: #ffa657;
+  }
+  .message-md .hljs-attr,
+  .message-md .hljs-attribute,
+  .message-md .hljs-property {
+    color: #79c0ff;
+  }
+  .message-md .hljs-tag,
+  .message-md .hljs-name {
+    color: #7ee787;
+  }
+  .message-md .hljs-variable,
+  .message-md .hljs-template-variable {
+    color: #ffa657;
+  }
+  .message-md .hljs-meta,
+  .message-md .hljs-doctag {
+    color: #8b949e;
+  }
+  .message-md .hljs-emphasis {
+    font-style: italic;
+  }
+  .message-md .hljs-strong {
+    font-weight: 600;
+  }
+}
