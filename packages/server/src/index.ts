@@ -4,6 +4,23 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { initDb } from "./db/index.js";
+import {
+  createFeed,
+  deleteFeed,
+  getFeed,
+  listFeeds,
+  updateFeed,
+  type CreateFeedInput,
+  type UpdateFeedInput,
+} from "./feeds/config.js";
+import { saveFeedCookies } from "./feeds/cookies.js";
+import { listSourceTypes } from "./feeds/registry.js";
+import {
+  rescheduleFeed,
+  runFeedNow,
+  startFeedScheduler,
+  stopFeed,
+} from "./feeds/scheduler.js";
 import { channelsSync } from "./sync/channels.js";
 import type { ReplicatedDoc, SyncCollection } from "./sync/collection.js";
 import { messagesSync } from "./sync/messages.js";
@@ -76,12 +93,74 @@ function registerSyncRoutes<TDoc extends ReplicatedDoc>(
 registerSyncRoutes(messagesSync);
 registerSyncRoutes(channelsSync);
 
+/**
+ * Feeds API. Server-only configuration (credentials, schedules, cursors), kept
+ * off the RxDB sync path — the client talks to these over plain fetch. The
+ * notes a feed produces still arrive on clients through the normal messages
+ * stream.
+ */
+app.get("/api/feeds/sources", (c) => c.json(listSourceTypes()));
+
+app.get("/api/feeds", async (c) => c.json(await listFeeds()));
+
+app.post("/api/feeds", async (c) => {
+  const input = await c.req.json<CreateFeedInput>();
+  if (!input?.type || !input?.channelName) {
+    return c.json({ error: "type and channelName are required" }, 400);
+  }
+  const feed = await createFeed(input);
+  rescheduleFeed(feed);
+  return c.json(feed, 201);
+});
+
+app.patch("/api/feeds/:id", async (c) => {
+  const patch = await c.req.json<UpdateFeedInput>();
+  const feed = await updateFeed(c.req.param("id"), patch);
+  if (!feed) return c.json({ error: "not found" }, 404);
+  rescheduleFeed(feed);
+  return c.json(feed);
+});
+
+app.delete("/api/feeds/:id", async (c) => {
+  const id = c.req.param("id");
+  stopFeed(id);
+  await deleteFeed(id);
+  return c.json({ ok: true });
+});
+
+// Manual trigger — runs the feed now, independent of its schedule.
+app.post("/api/feeds/:id/refresh", async (c) => {
+  const id = c.req.param("id");
+  if (!(await getFeed(id))) return c.json({ error: "not found" }, 404);
+  return c.json(await runFeedNow(id));
+});
+
+// Seed/refresh the feed's auth: the body is the cookie array exported from the
+// browser (e.g. "Get cookies.txt LOCALLY").
+app.post("/api/feeds/:id/cookies", async (c) => {
+  const id = c.req.param("id");
+  if (!(await getFeed(id))) return c.json({ error: "not found" }, 404);
+  try {
+    saveFeedCookies(id, await c.req.json());
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : String(err) },
+      400,
+    );
+  }
+  return c.json({ ok: true });
+});
+
 // In prod the single container serves the built client from STATIC_DIR, with an
 // SPA fallback to index.html for any non-API, non-file route.
 if (STATIC_DIR) {
   app.use("/*", serveStatic({ root: STATIC_DIR }));
   app.get("/*", serveStatic({ path: "index.html", root: STATIC_DIR }));
 }
+
+// Schedule enabled feeds. Cron ticks fire on their own interval; nothing runs
+// on boot, so startup stays fast.
+await startFeedScheduler();
 
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`aside server listening on :${info.port}`);

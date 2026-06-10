@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
+    // DOM is type-only (for puppeteer page-evaluate callbacks); the tsup build
+    // targets Node and emits no DOM runtime.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "outDir": "./dist",
     "rootDir": "./src",

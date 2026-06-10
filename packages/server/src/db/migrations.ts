@@ -48,6 +48,26 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .on("channels")
     .column("seq")
     .execute();
+
+  // Server-only feed configuration. Not part of the sync protocol (no seq /
+  // deleted); it just persists each feed's source, schedule, cursor, and status.
+  await db.schema
+    .createTable("feed_sources")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("type", "text", (c) => c.notNull())
+    .addColumn("channel_id", "text", (c) => c.notNull())
+    .addColumn("channel_name", "text", (c) => c.notNull())
+    .addColumn("cron", "text", (c) => c.notNull())
+    .addColumn("enabled", "integer", (c) => c.notNull().defaultTo(1))
+    .addColumn("config", "text", (c) => c.notNull().defaultTo("{}"))
+    .addColumn("cursor", "text")
+    .addColumn("last_run_at", "integer")
+    .addColumn("last_status", "text")
+    .addColumn("last_error", "text")
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
 }
 
 async function ensureSeqColumn(db: Kysely<Database>): Promise<void> {

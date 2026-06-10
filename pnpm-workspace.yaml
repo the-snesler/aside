@@ -6,4 +6,5 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   protobufjs: false
+  puppeteer: true
   rxdb: false

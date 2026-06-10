@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import type { RxDocument } from "rxdb";
 import IconInbox from "~icons/lucide/inbox";
 import IconPlus from "~icons/lucide/plus";
+import IconSettings from "~icons/lucide/settings";
 import IconTrash from "~icons/lucide/trash-2";
 import type { ChannelCollection } from "../../db/database";
+import { FeedSettings } from "../feeds/FeedSettings";
 import { slugifyChannelName } from "./channelName";
 import { HOME_ID } from "./home";
 
@@ -19,6 +21,7 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
   const [draftName, setDraftName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     const sub = collection.find().$.subscribe((found) => {
@@ -71,9 +74,24 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
 
   return (
     <aside className="flex h-full min-h-0 flex-col bg-sidebar">
-      <header className="flex h-12 shrink-0 items-center border-b border-divider px-4 font-semibold shadow-sm">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-divider px-4 font-semibold shadow-sm">
         Aside
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Feeds settings"
+          title="Feeds"
+          className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+        >
+          <IconSettings className="h-4 w-4" />
+        </button>
       </header>
+
+      <FeedSettings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        channels={collection}
+      />
 
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         <button

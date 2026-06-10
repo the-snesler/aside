@@ -26,7 +26,37 @@ export interface ChannelsTable {
   deleted: number;
 }
 
+/**
+ * Server-only feed configuration. NOT synced through RxDB — credentials and
+ * per-source state must never enter the sync stream — so it has no `seq`/
+ * `deleted`. `config` and `cursor` are JSON-encoded text blobs.
+ */
+export interface FeedSourcesTable {
+  id: string;
+  /** source kind, e.g. "twitter-bookmarks" */
+  type: string;
+  /** target channel this feed writes notes into */
+  channel_id: string;
+  /** slug name used when the channel must be auto-created */
+  channel_name: string;
+  /** cron expression driving the schedule */
+  cron: string;
+  /** 0 | 1 */
+  enabled: number;
+  /** source-specific options, JSON */
+  config: string;
+  /** opaque resume marker, JSON, or null before the first run */
+  cursor: string | null;
+  last_run_at: number | null;
+  /** "ok" | "running" | "auth_required" | "error" */
+  last_status: string | null;
+  last_error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface Database {
   messages: MessagesTable;
   channels: ChannelsTable;
+  feed_sources: FeedSourcesTable;
 }

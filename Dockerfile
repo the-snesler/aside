@@ -6,6 +6,11 @@
 FROM node:24-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
+# Puppeteer (Twitter feed source): skip the chromium download during install —
+# the runtime stage installs the browser + its OS deps once, into this shared
+# cache dir, which puppeteer.launch() reads at run time.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
 RUN corepack enable
 WORKDIR /app
 
@@ -43,6 +48,14 @@ COPY --from=deploy /app/deploy/dist ./dist
 COPY --from=deploy /app/deploy/node_modules ./node_modules
 COPY --from=deploy /app/deploy/package.json ./package.json
 COPY --from=build /app/packages/client/dist ./public
+# Install Chromium + the OS libraries it needs for the Twitter bookmarks feed.
+# `--install-deps` lets puppeteer pick the correct apt packages for this base
+# image, avoiding a brittle hand-maintained list. The browser lands in
+# PUPPETEER_CACHE_DIR (set in the base stage). Persistent feed profiles live
+# under the /data volume, so sessions survive restarts.
+RUN apt-get update \
+  && ./node_modules/.bin/puppeteer browsers install chrome --install-deps \
+  && rm -rf /var/lib/apt/lists/*
 EXPOSE 3001
 VOLUME /data
 CMD ["node", "dist/index.js"]
