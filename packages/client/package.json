@@ -12,19 +12,25 @@
   "dependencies": {
     "@aside/shared": "workspace:*",
     "dexie": "^4.0.10",
+    "prismjs": "^1.30.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "rxdb": "^16.21.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "slate": "^0.124.1",
+    "slate-history": "^0.113.1",
+    "slate-react": "^0.124.2"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.111",
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
     "@tailwindcss/vite": "^4.3.0",
+    "@types/prismjs": "^1.26.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

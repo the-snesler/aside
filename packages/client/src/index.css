@@ -214,3 +214,22 @@
     font-weight: 600;
   }
 }
+
+/*
+ * MD-2 composer/edit decoration hints. Applied to Slate leaves by
+ * MarkdownEditor; the raw Markdown stays in place, these just style it.
+ */
+@layer components {
+  .composer-md-title {
+    font-weight: 600;
+    font-size: 1.15rem;
+  }
+  .composer-md-code {
+    /* The editor box is bg-rail, so use a lighter shade for the code chip. */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    background-color: var(--color-active);
+    border-radius: 0.25rem;
+    padding: 0 0.2rem;
+  }
+}

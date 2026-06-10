@@ -1,6 +1,7 @@
 import { memo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 // Force links into a new tab. react-markdown's default urlTransform already
@@ -11,7 +12,10 @@ const components: Components = {
   ),
 };
 
-const remarkPlugins = [remarkGfm];
+// remark-breaks renders a single newline as a hard line break (`<br>`) instead
+// of CommonMark's default soft break (collapsed to a space). Matches a chat/notes
+// composer, where each Shift+Enter line should survive into the rendered note.
+const remarkPlugins = [remarkGfm, remarkBreaks];
 const rehypePlugins = [rehypeHighlight];
 
 interface Props {

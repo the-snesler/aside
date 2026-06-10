@@ -9,6 +9,7 @@ import type { ChannelCollection, MessageCollection } from "../../db/database";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
 import { HOME_ID } from "../channels/home";
 import { Markdown } from "./Markdown";
+import { MarkdownEditor } from "./MarkdownEditor";
 
 interface Props {
   messages: MessageCollection;
@@ -22,10 +23,11 @@ export function MessageList({ messages, channels, channelId }: Props) {
   const [channelNames, setChannelNames] = useState<Map<string, string>>(
     new Map(),
   );
-  const [text, setText] = useState("");
-  // EDIT-1: which row is open for editing, and its working copy.
+  // Bumped after each successful send to remount (and so clear + refocus) the
+  // composer editor, which owns its own draft.
+  const [composerKey, setComposerKey] = useState(0);
+  // EDIT-1: which row is open for editing.
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState("");
 
   useEffect(() => {
     // Load all, then filter (Home shows every channel) + sort in JS. Matches the
@@ -53,9 +55,8 @@ export function MessageList({ messages, channels, channelId }: Props) {
     ? "Home"
     : (channelNames.get(channelId) ?? channelId);
 
-  async function addMessage(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = text.trim();
+  async function handleSend(raw: string) {
+    const trimmed = raw.trim();
     if (!trimmed) return;
 
     // CH-4: a #tag files the note in an existing channel of that name and is
@@ -81,7 +82,8 @@ export function MessageList({ messages, channels, channelId }: Props) {
       createdAt: now,
       updatedAt: now,
     });
-    setText("");
+    // Remount the composer to clear it and put the caret back.
+    setComposerKey((k) => k + 1);
   }
 
   async function copyMessage(doc: RxDocument<MessageDoc>) {
@@ -97,19 +99,17 @@ export function MessageList({ messages, channels, channelId }: Props) {
 
   function startEdit(doc: RxDocument<MessageDoc>) {
     setEditingId(doc.id);
-    setEditDraft(doc.text);
   }
 
   function cancelEdit() {
     setEditingId(null);
-    setEditDraft("");
   }
 
-  async function saveEdit(doc: RxDocument<MessageDoc>) {
+  async function saveEdit(doc: RxDocument<MessageDoc>, raw: string) {
     // EDIT-1: write text + a fresh updatedAt through the normal replication
     // path; the bumped timestamp makes the edit win LWW conflict resolution.
     // Empty or unchanged is a no-op (delete has its own button).
-    const trimmed = editDraft.trim();
+    const trimmed = raw.trim();
     if (!trimmed || trimmed === doc.text) {
       cancelEdit();
       return;
@@ -164,25 +164,13 @@ export function MessageList({ messages, channels, channelId }: Props) {
                     )}
                     {isEditing ? (
                       <div className="min-w-0 flex-1">
-                        <textarea
+                        <MarkdownEditor
+                          key={doc.id}
+                          initialValue={doc.text}
                           autoFocus
-                          value={editDraft}
-                          onChange={(e) => setEditDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            // Enter saves, Shift+Enter inserts a newline, Esc bails.
-                            if (e.key === "Escape") {
-                              e.preventDefault();
-                              cancelEdit();
-                            } else if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              void saveEdit(doc);
-                            }
-                          }}
-                          rows={Math.min(
-                            12,
-                            Math.max(1, editDraft.split("\n").length),
-                          )}
-                          className="w-full resize-none rounded-lg bg-rail px-3 py-2 text-ink outline-none focus:ring-1 focus:ring-accent"
+                          onSubmit={(t) => void saveEdit(doc, t)}
+                          onCancel={cancelEdit}
+                          className="max-h-[50vh] w-full overflow-y-auto rounded-lg bg-rail px-3 py-2 text-ink outline-none focus:ring-1 focus:ring-accent"
                         />
                         <div className="mt-1 text-xs text-muted">
                           escape to{" "}
@@ -193,14 +181,7 @@ export function MessageList({ messages, channels, channelId }: Props) {
                           >
                             cancel
                           </button>{" "}
-                          • enter to{" "}
-                          <button
-                            type="button"
-                            onClick={() => void saveEdit(doc)}
-                            className="text-accent hover:underline"
-                          >
-                            save
-                          </button>
+                          • enter to save • shift+enter for newline
                         </div>
                       </div>
                     ) : (
@@ -245,14 +226,16 @@ export function MessageList({ messages, channels, channelId }: Props) {
         ))}
       </div>
 
-      <form onSubmit={addMessage} className="shrink-0 px-4 pb-4">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+      <div className="shrink-0 px-4 pb-4">
+        <MarkdownEditor
+          key={composerKey}
+          initialValue=""
+          autoFocus
           placeholder={isHome ? "Jot a note…" : `Message #${headerName}`}
-          className="w-full rounded-lg bg-rail px-4 py-3 text-ink outline-none placeholder:text-muted focus:ring-1 focus:ring-accent"
+          onSubmit={(t) => void handleSend(t)}
+          className="max-h-[50vh] w-full overflow-y-auto rounded-lg bg-rail px-4 py-3 text-ink outline-none focus:ring-1 focus:ring-accent"
         />
-      </form>
+      </div>
     </main>
   );
 }
