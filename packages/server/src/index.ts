@@ -21,8 +21,10 @@ import {
   startFeedScheduler,
   stopFeed,
 } from "./feeds/scheduler.js";
+import { startEmbeds } from "./embeds/index.js";
 import { channelsSync } from "./sync/channels.js";
 import type { ReplicatedDoc, SyncCollection } from "./sync/collection.js";
+import { embedsSync } from "./sync/embeds.js";
 import { messagesSync } from "./sync/messages.js";
 import { pull } from "./sync/pull.js";
 import { push, type PushRow } from "./sync/push.js";
@@ -33,6 +35,10 @@ const PORT = Number(process.env.PORT ?? 3001);
 const STATIC_DIR = process.env.STATIC_DIR;
 
 await initDb();
+
+// Begin OpenGraph extraction: subscribe to message writes + backfill existing
+// notes. Must run after initDb so the embeds seq counter is primed.
+startEmbeds();
 
 const app = new Hono();
 
@@ -92,6 +98,7 @@ function registerSyncRoutes<TDoc extends ReplicatedDoc>(
 
 registerSyncRoutes(messagesSync);
 registerSyncRoutes(channelsSync);
+registerSyncRoutes(embedsSync);
 
 /**
  * Feeds API. Server-only configuration (credentials, schedules, cursors), kept

@@ -44,6 +44,44 @@ export interface ChannelDoc {
 export type ReplicatedChannelDoc = ChannelDoc & { _deleted: boolean };
 
 /**
+ * An OpenGraph link-preview "sidecar" for a URL found in a message (OG-1/OG-2).
+ *
+ * Unlike messages and channels, embeds are *server-authoritative*: the server
+ * fetches and writes them, clients only ever read them. Keeping them in their
+ * own collection means the server never has to touch the client-owned message
+ * doc — so attaching a preview never marks a note as edited and never contends
+ * with a client edit through LWW. A message can have several embeds (one per
+ * URL), so `id` is derived from `messageId` + the URL, not equal to `messageId`.
+ *
+ * `sourceUpdatedAt` records the message `updatedAt` this embed was derived from;
+ * the extraction worker uses it as a staleness guard so a slow fetch never
+ * attaches a preview built from text that has since been edited away.
+ */
+export interface EmbedDoc {
+  /** `${messageId}:${shortHash(url)}` — deterministic so re-runs upsert in place */
+  id: string;
+  /** the message this preview belongs to */
+  messageId: string;
+  /** the URL the preview was built from */
+  url: string;
+  title?: string;
+  description?: string;
+  /** absolute image URL (og:image), resolved against the page URL */
+  image?: string;
+  /** og:site_name, e.g. "GitHub" */
+  siteName?: string;
+  /** the message `updatedAt` this preview was derived from; staleness guard */
+  sourceUpdatedAt: number;
+  /** ms epoch */
+  createdAt: number;
+  /** ms epoch — last-write-time; used by conflict resolution */
+  updatedAt: number;
+}
+
+/** An embed as it travels over the sync protocol, carrying RxDB's soft-delete flag. */
+export type ReplicatedEmbedDoc = EmbedDoc & { _deleted: boolean };
+
+/**
  * Replication checkpoint. The server owns `seq` and uses it as the pull cursor,
  * so sync ordering does not depend on client clocks. Each collection tracks its
  * own checkpoint.

@@ -1,26 +1,40 @@
-import { DEFAULT_CHANNEL_ID, type MessageDoc } from "@aside/shared";
+import {
+  DEFAULT_CHANNEL_ID,
+  type EmbedDoc,
+  type MessageDoc,
+} from "@aside/shared";
 import { useEffect, useMemo, useState } from "react";
 import type { RxDocument } from "rxdb";
 import IconCopy from "~icons/lucide/copy";
 import IconInbox from "~icons/lucide/inbox";
 import IconPencil from "~icons/lucide/pencil";
 import IconTrash from "~icons/lucide/trash-2";
-import type { ChannelCollection, MessageCollection } from "../../db/database";
+import type {
+  ChannelCollection,
+  EmbedCollection,
+  MessageCollection,
+} from "../../db/database";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
 import { HOME_ID } from "../channels/home";
+import { LinkPreviewCard } from "./LinkPreviewCard";
 import { Markdown } from "./Markdown";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 interface Props {
   messages: MessageCollection;
   channels: ChannelCollection;
+  embeds: EmbedCollection;
   channelId: string;
 }
 
-export function MessageList({ messages, channels, channelId }: Props) {
+export function MessageList({ messages, channels, embeds, channelId }: Props) {
   const isHome = channelId === HOME_ID;
   const [docs, setDocs] = useState<RxDocument<MessageDoc>[]>([]);
   const [channelNames, setChannelNames] = useState<Map<string, string>>(
+    new Map(),
+  );
+  // OG-2: server-attached link previews, grouped by the message they belong to.
+  const [embedsByMessage, setEmbedsByMessage] = useState<Map<string, EmbedDoc[]>>(
     new Map(),
   );
   // Bumped after each successful send to remount (and so clear + refocus) the
@@ -49,6 +63,22 @@ export function MessageList({ messages, channels, channelId }: Props) {
     });
     return () => sub.unsubscribe();
   }, [channels]);
+
+  useEffect(() => {
+    // messageId → its previews. find() already excludes soft-deleted embeds, so
+    // a preview whose URL was edited out simply disappears. Sorted by creation so
+    // multiple cards keep a stable order.
+    const sub = embeds.find().$.subscribe((found) => {
+      const map = new Map<string, EmbedDoc[]>();
+      for (const e of [...found].sort((a, b) => a.createdAt - b.createdAt)) {
+        const list = map.get(e.messageId);
+        if (list) list.push(e);
+        else map.set(e.messageId, [e]);
+      }
+      setEmbedsByMessage(map);
+    });
+    return () => sub.unsubscribe();
+  }, [embeds]);
 
   const groups = useMemo(() => groupByDay(docs), [docs]);
   const headerName = isHome
@@ -185,10 +215,15 @@ export function MessageList({ messages, channels, channelId }: Props) {
                         </div>
                       </div>
                     ) : (
-                      <Markdown
-                        text={doc.text}
-                        className="min-w-0 flex-1 break-words text-ink"
-                      />
+                      <div className="min-w-0 flex-1">
+                        <Markdown
+                          text={doc.text}
+                          className="break-words text-ink"
+                        />
+                        {embedsByMessage.get(doc.id)?.map((embed) => (
+                          <LinkPreviewCard key={embed.id} embed={embed} />
+                        ))}
+                      </div>
                     )}
                     {!isEditing && (
                       <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-1 rounded bg-rail px-1 py-0.5 shadow group-hover:flex">

@@ -49,6 +49,52 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .column("seq")
     .execute();
 
+  // OpenGraph link-preview sidecars (OG-1/OG-2). Same synced shape as messages —
+  // server-owned seq cursor + soft-delete — but written only by the extraction
+  // worker. The OpenGraph columns are nullable; a fetch may resolve only some.
+  await db.schema
+    .createTable("embeds")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("message_id", "text", (c) => c.notNull())
+    .addColumn("url", "text", (c) => c.notNull())
+    .addColumn("title", "text")
+    .addColumn("description", "text")
+    .addColumn("image", "text")
+    .addColumn("site_name", "text")
+    .addColumn("source_updated_at", "integer", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
+    .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
+    .execute();
+
+  await db.schema
+    .createIndex("embeds_seq")
+    .ifNotExists()
+    .on("embeds")
+    .column("seq")
+    .execute();
+
+  // The worker looks up a message's embeds by message_id to refresh/prune them.
+  await db.schema
+    .createIndex("embeds_message_id")
+    .ifNotExists()
+    .on("embeds")
+    .column("message_id")
+    .execute();
+
+  // Server-only URL→OpenGraph cache. Not synced (no seq/deleted); dedupes fetches
+  // of the same link across messages and negative-caches dead URLs.
+  await db.schema
+    .createTable("og_cache")
+    .ifNotExists()
+    .addColumn("url", "text", (c) => c.primaryKey())
+    .addColumn("status", "text", (c) => c.notNull())
+    .addColumn("payload", "text")
+    .addColumn("fetched_at", "integer", (c) => c.notNull())
+    .execute();
+
   // Server-only feed configuration. Not part of the sync protocol (no seq /
   // deleted); it just persists each feed's source, schedule, cursor, and status.
   await db.schema

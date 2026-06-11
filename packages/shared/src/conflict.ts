@@ -1,5 +1,5 @@
 import type { RxConflictHandler } from "rxdb";
-import type { ChannelDoc, MessageDoc } from "./types.js";
+import type { ChannelDoc, EmbedDoc, MessageDoc } from "./types.js";
 
 /**
  * Builds a deterministic last-write-wins conflict handler for any collection
@@ -53,3 +53,6 @@ function stableKey(doc: object): string {
 
 export const messageConflictHandler = createLwwConflictHandler<MessageDoc>();
 export const channelConflictHandler = createLwwConflictHandler<ChannelDoc>();
+// Embeds are server-authoritative (clients never write them), so conflicts are
+// effectively impossible — but RxDB requires a handler, and LWW is a safe default.
+export const embedConflictHandler = createLwwConflictHandler<EmbedDoc>();

@@ -2,6 +2,9 @@ import {
   channelConflictHandler,
   channelMigrationStrategies,
   channelSchema,
+  embedConflictHandler,
+  embedMigrationStrategies,
+  embedSchema,
   messageConflictHandler,
   messageMigrationStrategies,
   messageSchema,
@@ -22,5 +25,10 @@ export const collections = {
     schema: channelSchema,
     migrationStrategies: channelMigrationStrategies,
     conflictHandler: channelConflictHandler,
+  },
+  embeds: {
+    schema: embedSchema,
+    migrationStrategies: embedMigrationStrategies,
+    conflictHandler: embedConflictHandler,
   },
 };
