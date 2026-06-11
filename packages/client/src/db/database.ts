@@ -1,4 +1,9 @@
-import type { ChannelDoc, EmbedDoc, MessageDoc } from "@aside/shared";
+import type {
+  AttachmentDoc,
+  ChannelDoc,
+  EmbedDoc,
+  MessageDoc,
+} from "@aside/shared";
 import {
   addRxPlugin,
   createRxDatabase,
@@ -26,10 +31,12 @@ const storage = import.meta.env.DEV
 export type MessageCollection = RxCollection<MessageDoc>;
 export type ChannelCollection = RxCollection<ChannelDoc>;
 export type EmbedCollection = RxCollection<EmbedDoc>;
+export type AttachmentCollection = RxCollection<AttachmentDoc>;
 export interface AsideCollections {
   messages: MessageCollection;
   channels: ChannelCollection;
   embeds: EmbedCollection;
+  attachments: AttachmentCollection;
 }
 export type AsideDatabase = RxDatabase<AsideCollections>;
 

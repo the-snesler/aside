@@ -69,6 +69,25 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
     .execute();
 
+  // Attachments sync through the same protocol as messages/channels, so they
+  // get the same shape: a server-owned seq cursor and a soft-delete flag. The
+  // bytes live in the blob store; this table only holds metadata + the link to
+  // a message. New table — no backfill.
+  await db.schema
+    .createTable("attachments")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("message_id", "text", (c) => c.notNull())
+    .addColumn("blob_hash", "text", (c) => c.notNull())
+    .addColumn("file_name", "text", (c) => c.notNull())
+    .addColumn("mime_type", "text", (c) => c.notNull())
+    .addColumn("size", "integer", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
+    .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
+    .execute();
+
   await db.schema
     .createIndex("embeds_seq")
     .ifNotExists()
@@ -93,6 +112,33 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("status", "text", (c) => c.notNull())
     .addColumn("payload", "text")
     .addColumn("fetched_at", "integer", (c) => c.notNull())
+    .execute();
+
+  await db.schema
+    .createIndex("attachments_seq")
+    .ifNotExists()
+    .on("attachments")
+    .column("seq")
+    .execute();
+
+  // Render path fetches a message's attachments by message_id.
+  await db.schema
+    .createIndex("attachments_message_id")
+    .ifNotExists()
+    .on("attachments")
+    .column("message_id")
+    .execute();
+
+  // Server-only blob metadata. Not part of the sync protocol (no seq / deleted);
+  // it backs the download endpoint's Content-Type. The bytes live in the blob
+  // store keyed by `hash`.
+  await db.schema
+    .createTable("blobs")
+    .ifNotExists()
+    .addColumn("hash", "text", (c) => c.primaryKey())
+    .addColumn("content_type", "text", (c) => c.notNull())
+    .addColumn("size", "integer", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
     .execute();
 
   // Server-only feed configuration. Not part of the sync protocol (no seq /

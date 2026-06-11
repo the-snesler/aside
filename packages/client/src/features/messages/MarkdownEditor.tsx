@@ -132,6 +132,13 @@ interface MarkdownEditorProps {
   onSubmit: (text: string) => void;
   /** Escape — used by the inline edit box to bail out. */
   onCancel?: () => void;
+  /**
+   * Pasted/dropped files (ATT-3). When set, the editor intercepts file paste +
+   * drop and hands the files up instead of inserting them as text; the parent
+   * owns the upload + pending-attachment tray. Omit it (e.g. the inline edit box)
+   * to keep the editor text-only.
+   */
+  onAddFiles?: (files: File[]) => void;
   /** Box chrome (background, rounding, padding, focus ring). */
   className?: string;
 }
@@ -142,6 +149,7 @@ export function MarkdownEditor({
   autoFocus,
   onSubmit,
   onCancel,
+  onAddFiles,
   className,
 }: MarkdownEditorProps) {
   const editor = useMemo(() => withHistory(withReact(createEditor())), []);
@@ -194,6 +202,31 @@ export function MarkdownEditor({
     [editor, onSubmit, onCancel],
   );
 
+  // ATT-3: intercept file paste/drop and hand the files up. Calling
+  // preventDefault tells slate-react we handled the event, so it won't also try
+  // to insert the file as text. Text paste/drop (no files) falls through.
+  const onPaste = useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      if (!onAddFiles) return;
+      const files = Array.from(event.clipboardData.files);
+      if (files.length === 0) return;
+      event.preventDefault();
+      onAddFiles(files);
+    },
+    [onAddFiles],
+  );
+
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!onAddFiles) return;
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length === 0) return;
+      event.preventDefault();
+      onAddFiles(files);
+    },
+    [onAddFiles],
+  );
+
   useEffect(() => {
     if (!autoFocus) return;
     try {
@@ -213,6 +246,8 @@ export function MarkdownEditor({
         renderLeaf={renderLeaf}
         renderPlaceholder={renderPlaceholder}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        onDrop={onDrop}
         placeholder={placeholder}
         spellCheck
       />

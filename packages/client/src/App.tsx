@@ -21,6 +21,10 @@ export function App() {
       // Embeds are server-authoritative; the client only ever pulls them, so the
       // generic push handler simply never has local changes to send.
       startReplication({ collection: database.embeds, name: "embeds" });
+      startReplication({
+        collection: database.attachments,
+        name: "attachments",
+      });
       setDb(database);
     });
     return () => {
@@ -47,6 +51,7 @@ export function App() {
         messages={db.messages}
         channels={db.channels}
         embeds={db.embeds}
+        attachments={db.attachments}
         channelId={channelId}
       />
     </div>

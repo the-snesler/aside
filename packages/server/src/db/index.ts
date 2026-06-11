@@ -59,4 +59,10 @@ export async function initDb(): Promise<void> {
     .select((eb) => eb.fn.max<number>("seq").as("maxSeq"))
     .executeTakeFirst();
   initSequence("embeds", Number(embedsMax?.maxSeq ?? 0));
+
+  const attachmentsMax = await db
+    .selectFrom("attachments")
+    .select((eb) => eb.fn.max<number>("seq").as("maxSeq"))
+    .executeTakeFirst();
+  initSequence("attachments", Number(attachmentsMax?.maxSeq ?? 0));
 }

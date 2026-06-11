@@ -1,4 +1,7 @@
 import {
+  attachmentConflictHandler,
+  attachmentMigrationStrategies,
+  attachmentSchema,
   channelConflictHandler,
   channelMigrationStrategies,
   channelSchema,
@@ -30,5 +33,10 @@ export const collections = {
     schema: embedSchema,
     migrationStrategies: embedMigrationStrategies,
     conflictHandler: embedConflictHandler,
+  },
+  attachments: {
+    schema: attachmentSchema,
+    migrationStrategies: attachmentMigrationStrategies,
+    conflictHandler: attachmentConflictHandler,
   },
 };
