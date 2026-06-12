@@ -2,6 +2,7 @@ import { DEFAULT_CHANNEL_ID, type ChannelDoc } from "@aside/shared";
 import { useEffect, useState } from "react";
 import type { RxDocument } from "rxdb";
 import IconInbox from "~icons/lucide/inbox";
+import IconLogOut from "~icons/lucide/log-out";
 import IconPlus from "~icons/lucide/plus";
 import IconSettings from "~icons/lucide/settings";
 import IconTrash from "~icons/lucide/trash-2";
@@ -14,9 +15,15 @@ interface Props {
   collection: ChannelCollection;
   selectedId: string;
   onSelect: (id: string) => void;
+  onLogout: () => void;
 }
 
-export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
+export function ChannelSidebar({
+  collection,
+  selectedId,
+  onSelect,
+  onLogout,
+}: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
   const [draftName, setDraftName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -76,15 +83,26 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
     <aside className="flex h-full min-h-0 flex-col bg-sidebar">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-divider px-4 font-semibold shadow-sm">
         Aside
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          aria-label="Feeds settings"
-          title="Feeds"
-          className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
-        >
-          <IconSettings className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Feeds settings"
+            title="Feeds"
+            className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+          >
+            <IconSettings className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Log out"
+            title="Log out"
+            className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+          >
+            <IconLogOut className="h-4 w-4" />
+          </button>
+        </div>
       </header>
 
       <FeedSettings

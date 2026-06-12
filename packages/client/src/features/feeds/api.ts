@@ -4,6 +4,7 @@
  * over plain fetch. The notes a feed produces still arrive via normal message
  * replication.
  */
+import { authFetch } from "../../auth";
 
 export type FeedStatus = "ok" | "running" | "auth_required" | "error";
 
@@ -48,7 +49,7 @@ export interface UpdateFeedInput {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await authFetch(url, init);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(

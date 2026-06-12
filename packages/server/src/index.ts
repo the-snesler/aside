@@ -3,6 +3,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
+import { createAuthMiddleware, registerAuthRoutes } from "./auth/index.js";
 import { getBlobDriver, sha256 } from "./blobs/index.js";
 import { db, initDb } from "./db/index.js";
 import {
@@ -47,6 +48,9 @@ const app = new Hono();
 app.use("/api/*", cors());
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+registerAuthRoutes(app);
+app.use("/api/*", createAuthMiddleware());
 
 /**
  * Mounts the pull/push/stream trio for one collection under

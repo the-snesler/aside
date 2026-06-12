@@ -160,6 +160,35 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("created_at", "integer", (c) => c.notNull())
     .addColumn("updated_at", "integer", (c) => c.notNull())
     .execute();
+
+  // Single-user auth. The owner table intentionally has one stable primary key
+  // so first-run setup can be enforced by a normal uniqueness constraint.
+  await db.schema
+    .createTable("auth_owner")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("password_hash", "text", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("auth_sessions")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("token_hash", "text", (c) => c.notNull().unique())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("last_seen_at", "integer", (c) => c.notNull())
+    .addColumn("user_agent", "text")
+    .addColumn("revoked_at", "integer")
+    .execute();
+
+  await db.schema
+    .createIndex("auth_sessions_token_hash")
+    .ifNotExists()
+    .on("auth_sessions")
+    .column("token_hash")
+    .execute();
 }
 
 async function ensureSeqColumn(db: Kysely<Database>): Promise<void> {
