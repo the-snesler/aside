@@ -21,6 +21,10 @@ import {
 import { channelColor } from "./channelColor";
 import { slugifyChannelName } from "./channelName";
 
+// Dropping a note onto a channel button files it there; MessageRow stamps the
+// dragged note's id onto the dataTransfer under this MIME type.
+const MESSAGE_DRAG_TYPE = "application/x-aside-message-id";
+
 interface Props {
   collection: ChannelCollection;
   counts: NoteCounts;
@@ -29,6 +33,7 @@ interface Props {
   onOpenSettings: () => void;
   onOpenSearch: () => void;
   onLogout: () => void;
+  onDropMessage: (channelId: string, messageId: string) => void;
 }
 
 export function ChannelSidebar({
@@ -39,12 +44,15 @@ export function ChannelSidebar({
   onOpenSettings,
   onOpenSearch,
   onLogout,
+  onDropMessage,
 }: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [creating, setCreating] = useState(false);
   const [draftName, setDraftName] = useState("");
+  // Channel currently under a dragged note, for the drop-target highlight.
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   useEffect(() => {
     const sub = collection.find().$.subscribe((found) => {
@@ -198,7 +206,29 @@ export function ChannelSidebar({
                     className="w-full rounded-xl bg-panel px-3 py-1.5 text-sm text-ink outline-none ring-1 ring-accent"
                   />
                 ) : (
-                  <div className="group relative">
+                  <div
+                    className={`group relative rounded-xl ${
+                      dropTargetId === doc.id ? "ring-2 ring-accent" : ""
+                    }`}
+                    onDragOver={(e) => {
+                      if (!e.dataTransfer.types.includes(MESSAGE_DRAG_TYPE))
+                        return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                      setDropTargetId(doc.id);
+                    }}
+                    onDragLeave={() =>
+                      setDropTargetId((id) => (id === doc.id ? null : id))
+                    }
+                    onDrop={(e) => {
+                      const messageId =
+                        e.dataTransfer.getData(MESSAGE_DRAG_TYPE);
+                      setDropTargetId(null);
+                      if (!messageId) return;
+                      e.preventDefault();
+                      onDropMessage(doc.id, messageId);
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => onSelect(doc.id)}
