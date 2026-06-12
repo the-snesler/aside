@@ -93,7 +93,7 @@ function itemToMessage(
     // Deterministic id → idempotent re-ingest; ingestNewBatch skips ids that
     // already exist, so edits/deletes by the user survive future runs.
     id: `${source.idPrefix}:${item.externalId}`,
-    channelId: feed.channelId,
+    channelIds: [feed.channelId],
     text: item.text,
     createdAt: item.createdAt,
     updatedAt: Date.now(),

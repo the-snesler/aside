@@ -17,7 +17,7 @@ import type {
 export function rowToDoc(row: MessagesTable): ReplicatedMessageDoc {
   return {
     id: row.id,
-    channelId: row.channel_id,
+    channelIds: parseChannelIds(row.channel_ids, row.channel_id),
     text: row.text,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -30,15 +30,36 @@ export function docToRow(
   doc: ReplicatedMessageDoc,
   seq: number,
 ): MessagesTable {
+  const channelIds = normalizeChannelIds(doc.channelIds);
   return {
     id: doc.id,
-    channel_id: doc.channelId,
+    channel_id: channelIds[0]!,
+    channel_ids: JSON.stringify(channelIds),
     text: doc.text,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
     seq,
     deleted: doc._deleted ? 1 : 0,
   };
+}
+
+function parseChannelIds(value: string | null, fallback: string): string[] {
+  if (!value) return [fallback];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return normalizeChannelIds(parsed, fallback);
+  } catch {
+    // Fall through to the legacy single-channel column.
+  }
+  return [fallback];
+}
+
+function normalizeChannelIds(input: unknown[], fallback = "general"): string[] {
+  const ids = input.filter(
+    (id): id is string => typeof id === "string" && id.length > 0,
+  );
+  const unique = [...new Set(ids)];
+  return unique.length > 0 ? unique : [fallback];
 }
 
 /** SQLite row → replication wire document, for channels. */

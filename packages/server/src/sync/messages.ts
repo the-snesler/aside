@@ -39,6 +39,7 @@ export const messagesSync: SyncCollection<ReplicatedMessageDoc> = {
       .onConflict((oc) =>
         oc.column("id").doUpdateSet({
           channel_id: row.channel_id,
+          channel_ids: row.channel_ids,
           text: row.text,
           created_at: row.created_at,
           updated_at: row.updated_at,

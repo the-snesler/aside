@@ -1,16 +1,13 @@
 import {
   DEFAULT_CHANNEL_ID,
   type AttachmentDoc,
+  type ChannelDoc,
   type EmbedDoc,
   type MessageDoc,
 } from "@aside/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Virtuoso,
-  type Components,
-  type VirtuosoHandle,
-} from "react-virtuoso";
-import type { RxDocument } from "rxdb";
+import { Virtuoso, type Components, type VirtuosoHandle } from "react-virtuoso";
+import type { MangoQuerySelector, RxDocument } from "rxdb";
 import IconArrowUp from "~icons/lucide/arrow-up";
 import IconCopy from "~icons/lucide/copy";
 import IconHash from "~icons/lucide/hash";
@@ -23,6 +20,7 @@ import IconPencil from "~icons/lucide/pencil";
 import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
 import IconSparkles from "~icons/lucide/sparkles";
+import IconTags from "~icons/lucide/tags";
 import IconTrash from "~icons/lucide/trash-2";
 import IconX from "~icons/lucide/x";
 import type {
@@ -32,6 +30,11 @@ import type {
   MessageCollection,
 } from "../../db/database";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
+import {
+  addMessageChannel,
+  messageChannelIds,
+  removeMessageChannel,
+} from "../channels/membership";
 import {
   ALL_ID,
   LINKS_ID,
@@ -93,6 +96,7 @@ export function MessageList({
 }: Props) {
   const smartView = isSmartView(view);
   const [docs, setDocs] = useState<RxDocument<MessageDoc>[]>([]);
+  const [channelDocs, setChannelDocs] = useState<RxDocument<ChannelDoc>[]>([]);
   const [channelNames, setChannelNames] = useState<Map<string, string>>(
     new Map(),
   );
@@ -111,6 +115,7 @@ export function MessageList({
   const [composerKey, setComposerKey] = useState(0);
   // EDIT-1: which row is open for editing.
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [channelPickerId, setChannelPickerId] = useState<string | null>(null);
 
   const composerRef = useRef<MarkdownEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,6 +139,7 @@ export function MessageList({
   useEffect(() => {
     // id → name map for the header and smart-view per-note badges.
     const sub = channels.find().$.subscribe((found) => {
+      setChannelDocs([...found].sort((a, b) => a.createdAt - b.createdAt));
       setChannelNames(new Map(found.map((c) => [c.id, c.name])));
     });
     return () => sub.unsubscribe();
@@ -364,7 +370,7 @@ export function MessageList({
     const messageId = crypto.randomUUID();
     const inserted = await messages.insert({
       id: messageId,
-      channelId: targetChannelId,
+      channelIds: [targetChannelId],
       text: body,
       createdAt: now,
       updatedAt: now,
@@ -394,6 +400,23 @@ export function MessageList({
   }
 
   async function deleteMessage(doc: RxDocument<MessageDoc>) {
+    const channelIds = messageChannelIds(doc);
+    if (!smartView && channelIds.length > 1) {
+      const updated = await doc.incrementalPatch({
+        channelIds: removeMessageChannel(doc, view),
+        updatedAt: Date.now(),
+      });
+      setDocs((prev) => {
+        return matchesView(view, updated, imageMessageIds)
+          ? mergeDocs(
+              prev.filter((item) => item.id !== updated.id),
+              [updated],
+            )
+          : prev.filter((item) => item.id !== updated.id);
+      });
+      return;
+    }
+
     // Bump updatedAt so the soft-delete wins timestamp-based conflict handling,
     // then remove() the returned (new-revision) doc — not the stale reference.
     const bumped = await doc.incrementalPatch({ updatedAt: Date.now() });
@@ -425,12 +448,38 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
+  }
+
+  async function toggleMessageChannel(
+    doc: RxDocument<MessageDoc>,
+    channelId: string,
+  ) {
+    const channelIds = messageChannelIds(doc);
+    const nextChannelIds = channelIds.includes(channelId)
+      ? channelIds.length === 1
+        ? channelIds
+        : removeMessageChannel(doc, channelId)
+      : addMessageChannel(doc, channelId);
+    if (nextChannelIds.join("\0") === channelIds.join("\0")) return;
+
+    const updated = await doc.incrementalPatch({
+      channelIds: nextChannelIds,
+      updatedAt: Date.now(),
+    });
+    setDocs((prev) => {
+      return matchesView(view, updated, imageMessageIds)
+        ? mergeDocs(
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
+        : prev.filter((item) => item.id !== updated.id);
+    });
   }
 
   return (
@@ -509,8 +558,10 @@ export function MessageList({
                 <MessageRow
                   doc={row.doc}
                   smartView={smartView}
-                  channelName={channelNames.get(row.doc.channelId)}
+                  channels={channelDocs}
+                  channelNames={channelNames}
                   isEditing={editingId === row.doc.id}
+                  channelPickerOpen={channelPickerId === row.doc.id}
                   highlighted={highlightedId === row.doc.id}
                   embeds={embedsByMessage.get(row.doc.id)}
                   attachments={attachmentsByMessage.get(row.doc.id)}
@@ -519,6 +570,10 @@ export function MessageList({
                   onSaveEdit={saveEdit}
                   onCopy={copyMessage}
                   onDelete={deleteMessage}
+                  onToggleChannelPicker={(doc) =>
+                    setChannelPickerId((id) => (id === doc.id ? null : doc.id))
+                  }
+                  onToggleChannel={toggleMessageChannel}
                 />
               )
             }
@@ -639,7 +694,9 @@ function ListFooter() {
 function ListEmpty({ context }: { context?: ListContext }) {
   return (
     <p className="px-2 py-8 text-center text-sm text-muted">
-      {context?.smartView ? "No notes here yet." : "No notes in this space yet."}
+      {context?.smartView
+        ? "No notes here yet."
+        : "No notes in this space yet."}
     </p>
   );
 }
@@ -653,8 +710,10 @@ const listComponents: Components<TimelineRow, ListContext> = {
 function MessageRow({
   doc,
   smartView,
-  channelName,
+  channels,
+  channelNames,
   isEditing,
+  channelPickerOpen,
   highlighted,
   embeds,
   attachments,
@@ -663,11 +722,15 @@ function MessageRow({
   onSaveEdit,
   onCopy,
   onDelete,
+  onToggleChannelPicker,
+  onToggleChannel,
 }: {
   doc: RxDocument<MessageDoc>;
   smartView: boolean;
-  channelName?: string;
+  channels: RxDocument<ChannelDoc>[];
+  channelNames: Map<string, string>;
   isEditing: boolean;
+  channelPickerOpen: boolean;
   highlighted?: boolean;
   embeds?: EmbedDoc[];
   attachments?: RxDocument<AttachmentDoc>[];
@@ -676,11 +739,28 @@ function MessageRow({
   onSaveEdit: (doc: RxDocument<MessageDoc>, raw: string) => Promise<void>;
   onCopy: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onDelete: (doc: RxDocument<MessageDoc>) => Promise<void>;
+  onToggleChannelPicker: (doc: RxDocument<MessageDoc>) => void;
+  onToggleChannel: (
+    doc: RxDocument<MessageDoc>,
+    channelId: string,
+  ) => Promise<void>;
 }) {
+  const channelIds = messageChannelIds(doc);
+  const channelLabel = channelIds
+    .map((channelId) => channelNames.get(channelId))
+    .filter((name): name is string => !!name)
+    .join(", ");
+
   return (
     <div
-      className={`group w-full relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${highlighted ? "bg-active ring-2 ring-accent/60" : ""
-        }`}
+      draggable={!isEditing}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-aside-message-id", doc.id);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      className={`group w-full relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${
+        highlighted ? "bg-active ring-2 ring-accent/60" : ""
+      }`}
     >
       <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
         {formatTime(doc.createdAt)}
@@ -688,7 +768,7 @@ function MessageRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {smartView && (
           <span className="w-fit rounded-md bg-hover px-2 py-0.5 text-[11px] font-medium text-muted">
-            <span className="opacity-60">#</span> {channelName ?? "unknown"}
+            <span className="opacity-60">#</span> {channelLabel || "unknown"}
           </span>
         )}
         {isEditing ? (
@@ -729,6 +809,14 @@ function MessageRow({
         <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider group-hover:flex">
           <button
             type="button"
+            onClick={() => onToggleChannelPicker(doc)}
+            aria-label="Edit spaces"
+            className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
+          >
+            <IconTags className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => onStartEdit(doc)}
             aria-label="Edit"
             className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
@@ -752,6 +840,33 @@ function MessageRow({
             <IconTrash className="h-4 w-4" />
           </button>
         </span>
+      )}
+      {!isEditing && channelPickerOpen && (
+        <div className="absolute right-2 top-6 z-20 w-56 rounded-xl bg-panel p-2 text-sm shadow-xl ring-1 ring-divider">
+          {channels.map((channel) => {
+            const checked = channelIds.includes(channel.id);
+            const disabled = checked && channelIds.length === 1;
+            return (
+              <label
+                key={channel.id}
+                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
+                  disabled ? "text-muted" : "text-ink hover:bg-hover"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => void onToggleChannel(doc, channel.id)}
+                  className="h-4 w-4 accent-[var(--color-accent)]"
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="text-muted">#</span> {channel.name}
+                </span>
+              </label>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -785,7 +900,11 @@ function headerMeta(
  * Renders a message's attachments below its body (ATT-3): images as inline
  * preview cards (linking to the full blob), other files as a download chip.
  */
-export function AttachmentCards({ items }: { items?: RxDocument<AttachmentDoc>[] }) {
+export function AttachmentCards({
+  items,
+}: {
+  items?: RxDocument<AttachmentDoc>[];
+}) {
   if (!items || items.length === 0) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-2">
@@ -866,7 +985,7 @@ async function fetchPage(
   imageMessageIds: Set<string>,
   before: number | null,
 ): Promise<PageResult> {
-  if (view === LINKS_ID || view === PHOTOS_ID) {
+  if (view !== ALL_ID && view !== TODAY_ID) {
     return fetchFilteredPage(messages, view, imageMessageIds, before);
   }
   const docs = await queryRecent(
@@ -909,7 +1028,7 @@ async function fetchFilteredPage(
 
 async function queryRecent(
   messages: MessageCollection,
-  selector: Record<string, unknown>,
+  selector: MangoQuerySelector<MessageDoc>,
   limit: number,
 ): Promise<RxDocument<MessageDoc>[]> {
   const docs = await messages
@@ -925,7 +1044,7 @@ async function queryRecent(
 function recentSelector(
   view: string,
   before: number | null,
-): Record<string, unknown> {
+): MangoQuerySelector<MessageDoc> {
   const createdAt = before === null ? {} : { $lt: before };
   if (view === TODAY_ID) {
     const { start, end } = todayRange();
@@ -940,10 +1059,13 @@ function recentSelector(
   if (view === ALL_ID) {
     return before === null ? {} : { createdAt };
   }
-  return before === null ? { channelId: view } : { channelId: view, createdAt };
+  return before === null ? {} : { createdAt };
 }
 
-function liveSelector(view: string, after: number): Record<string, unknown> {
+function liveSelector(
+  view: string,
+  after: number,
+): MangoQuerySelector<MessageDoc> {
   if (view === TODAY_ID) {
     const { start, end } = todayRange();
     return { createdAt: { $gte: Math.max(start, after), $lt: end } };
@@ -951,7 +1073,7 @@ function liveSelector(view: string, after: number): Record<string, unknown> {
   if (view === ALL_ID || view === LINKS_ID || view === PHOTOS_ID) {
     return { createdAt: { $gte: after } };
   }
-  return { channelId: view, createdAt: { $gte: after } };
+  return { createdAt: { $gte: after } };
 }
 
 function pageFromBatch(docs: RxDocument<MessageDoc>[]): PageResult {

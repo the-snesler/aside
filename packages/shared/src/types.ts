@@ -11,8 +11,8 @@
 export interface MessageDoc {
   /** uuid */
   id: string;
-  /** groundwork for channels; defaults to "general" until there's a channel UI */
-  channelId: string;
+  /** channel memberships; defaults to ["general"] for old/imported notes */
+  channelIds: string[];
   text: string;
   /** ms epoch */
   createdAt: number;
@@ -145,6 +145,6 @@ export interface Checkpoint {
 /**
  * The default channel every message lands in. Used as the channel's *id* (not a
  * uuid) so messages written before there was a channel UI — which carry
- * `channelId: "general"` — keep a valid home.
+ * `channelIds: ["general"]` — keep a valid home.
  */
 export const DEFAULT_CHANNEL_ID = "general";

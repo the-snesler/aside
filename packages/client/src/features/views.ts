@@ -1,6 +1,7 @@
 import type { MessageDoc } from "@aside/shared";
 import { useEffect, useState } from "react";
 import type { AttachmentCollection, MessageCollection } from "../db/database";
+import { messageChannelIds, messageHasChannel } from "./channels/membership";
 import { HOME_ID } from "./channels/home";
 
 /**
@@ -62,7 +63,7 @@ export function matchesView(
     case PHOTOS_ID:
       return imageMessageIds.has(doc.id);
     default:
-      return doc.channelId === view;
+      return messageHasChannel(doc, view);
   }
 }
 
@@ -122,7 +123,7 @@ export function useNoteCounts(
   return counts;
 }
 
-function computeCounts(
+export function computeCounts(
   msgs: MessageDoc[],
   imageMessageIds: Set<string>,
 ): NoteCounts {
@@ -134,7 +135,9 @@ function computeCounts(
     if (isToday(m.createdAt)) today += 1;
     if (hasLink(m.text)) links += 1;
     if (imageMessageIds.has(m.id)) photos += 1;
-    byChannel.set(m.channelId, (byChannel.get(m.channelId) ?? 0) + 1);
+    for (const channelId of messageChannelIds(m)) {
+      byChannel.set(channelId, (byChannel.get(channelId) ?? 0) + 1);
+    }
   }
   return { all: msgs.length, today, links, photos, byChannel };
 }

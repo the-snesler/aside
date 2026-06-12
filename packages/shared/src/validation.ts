@@ -14,7 +14,7 @@ import type {
  */
 export const messageDocSchema: z.ZodType<ReplicatedMessageDoc> = z.object({
   id: z.string().min(1).max(64),
-  channelId: z.string().min(1).max(64),
+  channelIds: z.array(z.string().min(1).max(64)).min(1),
   text: z.string(),
   createdAt: z.number(),
   updatedAt: z.number(),

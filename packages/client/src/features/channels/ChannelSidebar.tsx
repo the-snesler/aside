@@ -29,6 +29,7 @@ interface Props {
   onOpenSettings: () => void;
   onOpenSearch: () => void;
   onLogout: () => void;
+  onDropMessage: (channelId: string, messageId: string) => void;
 }
 
 export function ChannelSidebar({
@@ -39,8 +40,10 @@ export function ChannelSidebar({
   onOpenSettings,
   onOpenSearch,
   onLogout,
+  onDropMessage,
 }: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [creating, setCreating] = useState(false);
@@ -154,10 +157,11 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? "bg-active text-ink shadow-sm"
-                    : "text-ink/80 hover:bg-hover"
-                    }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-active text-ink shadow-sm"
+                      : "text-ink/80 hover:bg-hover"
+                  }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -198,8 +202,32 @@ export function ChannelSidebar({
                   />
                 ) : (
                   <div
-                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
-                      }`}
+                    onDragOver={(e) => {
+                      if (
+                        e.dataTransfer.types.includes(
+                          "application/x-aside-message-id",
+                        )
+                      ) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                        setDragOverId(doc.id);
+                      }
+                    }}
+                    onDragLeave={() => setDragOverId(null)}
+                    onDrop={(e) => {
+                      const messageId = e.dataTransfer.getData(
+                        "application/x-aside-message-id",
+                      );
+                      setDragOverId(null);
+                      if (!messageId) return;
+                      e.preventDefault();
+                      onDropMessage(doc.id, messageId);
+                    }}
+                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${
+                      active || dragOverId === doc.id
+                        ? "bg-active text-ink shadow-sm"
+                        : "hover:bg-hover"
+                    }`}
                   >
                     <button
                       type="button"
