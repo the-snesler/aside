@@ -101,6 +101,57 @@ describe("auth routes", () => {
     });
     expect(after.status).toBe(401);
   });
+
+  it("changes the owner password and returns a fresh session", async () => {
+    const app = makeApp();
+    const token = await setup(app);
+
+    const bad = await app.request("/api/auth/password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: "wrong",
+        newPassword: "new-secret",
+      }),
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+    });
+    expect(bad.status).toBe(401);
+
+    const change = await app.request("/api/auth/password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword: "secret",
+        newPassword: "new-secret",
+      }),
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+    });
+    expect(change.status).toBe(200);
+    const body = (await change.json()) as { token: string };
+
+    const oldLogin = await app.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ password: "secret" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await app.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ password: "new-secret" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(newLogin.status).toBe(200);
+
+    const protectedRes = await app.request("/api/private", {
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+    expect(protectedRes.status).toBe(200);
+  });
 });
 
 function makeApp(): Hono {

@@ -53,6 +53,27 @@ export async function logout(): Promise<void> {
   clearAuthToken();
 }
 
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<string> {
+  const res = await authFetch("/api/auth/password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `${res.status} ${res.statusText}${detail ? `: ${detail}` : ""}`,
+    );
+  }
+
+  const body = (await res.json()) as TokenResponse;
+  setAuthToken(body.token);
+  return body.token;
+}
+
 export async function authFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},

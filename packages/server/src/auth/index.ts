@@ -24,6 +24,11 @@ export interface AuthTokenResponse {
   token: string;
 }
 
+interface ChangePasswordBody {
+  currentPassword?: unknown;
+  newPassword?: unknown;
+}
+
 interface SessionMeta {
   userAgent: string | null;
 }
@@ -72,6 +77,36 @@ export function registerAuthRoutes(
     if (!token) return c.json({ error: "unauthorized" }, 401);
     await revokeSession(database, token);
     return c.json({ ok: true });
+  });
+
+  app.post("/api/auth/password", async (c) => {
+    const token = readToken(c);
+    if (!token || !(await validateSession(database, token))) {
+      return c.json({ error: "unauthorized" }, 401);
+    }
+
+    const body = await c.req.json<ChangePasswordBody>().catch(() => null);
+    const currentPassword =
+      typeof body?.currentPassword === "string" ? body.currentPassword : "";
+    const newPassword =
+      typeof body?.newPassword === "string" ? body.newPassword : "";
+    if (!currentPassword || !newPassword) {
+      return c.json(
+        { error: "currentPassword and newPassword are required" },
+        400,
+      );
+    }
+
+    const nextToken = await changePassword(
+      database,
+      currentPassword,
+      newPassword,
+      metaFromContext(c),
+    );
+    if (!nextToken) return c.json({ error: "invalid password" }, 401);
+
+    await revokeSession(database, token);
+    return c.json<AuthTokenResponse>({ token: nextToken });
   });
 }
 
@@ -124,6 +159,36 @@ async function login(
     .executeTakeFirst();
   if (!owner) return null;
   if (!(await verifyPassword(password, owner.password_hash))) return null;
+  return createSession(database, meta);
+}
+
+async function changePassword(
+  database: Kysely<Database>,
+  currentPassword: string,
+  newPassword: string,
+  meta: SessionMeta,
+): Promise<string | null> {
+  const owner = await database
+    .selectFrom("auth_owner")
+    .select("password_hash")
+    .where("id", "=", OWNER_ID)
+    .executeTakeFirst();
+  if (!owner) return null;
+  if (!(await verifyPassword(currentPassword, owner.password_hash)))
+    return null;
+
+  const now = Date.now();
+  await database
+    .updateTable("auth_owner")
+    .set({ password_hash: await hashPassword(newPassword), updated_at: now })
+    .where("id", "=", OWNER_ID)
+    .execute();
+  await database
+    .updateTable("auth_sessions")
+    .set({ revoked_at: now })
+    .where("revoked_at", "is", null)
+    .execute();
+
   return createSession(database, meta);
 }
 

@@ -232,7 +232,11 @@ function Workspace({
         }
       >
         {view === SETTINGS_ID ? (
-          <SettingsPage onOpenMenu={() => setSidebarOpen(true)} />
+          <SettingsPage
+            channels={db.channels}
+            config={db.config}
+            onOpenMenu={() => setSidebarOpen(true)}
+          />
         ) : (
           <MessageList
             messages={db.messages}
