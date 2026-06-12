@@ -14,12 +14,17 @@ import type {
  */
 export const messageSchema: RxJsonSchema<MessageDoc> = {
   title: "message schema",
-  version: 2,
+  version: 3,
   primaryKey: "id",
   type: "object",
   properties: {
     id: { type: "string", maxLength: 64 },
-    channelId: { type: "string", maxLength: 64 },
+    channelIds: {
+      type: "array",
+      minItems: 1,
+      uniqueItems: true,
+      items: { type: "string", maxLength: 64 },
+    },
     text: { type: "string" },
     createdAt: {
       type: "number",
@@ -29,13 +34,20 @@ export const messageSchema: RxJsonSchema<MessageDoc> = {
     },
     updatedAt: { type: "number" },
   },
-  required: ["id", "channelId", "text", "createdAt", "updatedAt"],
-  indexes: ["createdAt", ["channelId", "createdAt"]],
+  required: ["id", "channelIds", "text", "createdAt", "updatedAt"],
+  indexes: ["createdAt"],
 } as const;
+
+type LegacyMessageDoc = Omit<MessageDoc, "channelIds"> & { channelId?: string };
 
 export const messageMigrationStrategies = {
   1: (doc: MessageDoc) => doc,
   2: (doc: MessageDoc) => doc,
+  3: (doc: LegacyMessageDoc): MessageDoc => {
+    const channelId = doc.channelId || "general";
+    const { channelId: _channelId, ...rest } = doc;
+    return { ...rest, channelIds: [channelId] };
+  },
 };
 
 /**

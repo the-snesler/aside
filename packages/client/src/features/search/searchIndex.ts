@@ -8,6 +8,7 @@ import MiniSearch, { type SearchResult } from "minisearch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RxDocument } from "rxdb";
 import type { AsideDatabase } from "../../db/database";
+import { messageChannelIds } from "../channels/membership";
 
 export type SearchSort = "relevance" | "newest" | "oldest";
 
@@ -23,7 +24,7 @@ export interface SearchChannel {
 
 export interface SearchNote {
   id: string;
-  channelId: string;
+  channelIds: string[];
   createdAt: number;
   text: string;
   previewText: string;
@@ -39,7 +40,7 @@ export interface SearchResults {
 
 interface SearchDoc {
   id: string;
-  channelId: string;
+  channelIds: string[];
   createdAt: number;
   text: string;
   previewText: string;
@@ -129,7 +130,8 @@ export function useSearchIndex(db: AsideDatabase): {
       .filter((note): note is SearchNote => {
         if (!note) return false;
         return (
-          !options.scopeChannelId || note.channelId === options.scopeChannelId
+          !options.scopeChannelId ||
+          note.channelIds.includes(options.scopeChannelId)
         );
       });
 
@@ -163,7 +165,7 @@ function assembleSearchDocs(
 
   return messages.map((message) => ({
     id: message.id,
-    channelId: message.channelId,
+    channelIds: messageChannelIds(message),
     createdAt: message.createdAt,
     text: message.text,
     previewText: (embedsByMessage.get(message.id) ?? [])

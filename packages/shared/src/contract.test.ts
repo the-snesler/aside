@@ -23,7 +23,7 @@ import type {
 
 const sample: ReplicatedMessageDoc = {
   id: "message-1",
-  channelId: "general",
+  channelIds: ["general"],
   text: "hello",
   createdAt: 1,
   updatedAt: 2,
@@ -51,10 +51,25 @@ describe("message contract", () => {
     expect(messageDocSchema.parse(sample)).toEqual(sample);
   });
 
-  it("has identity migrations from the original schema", () => {
-    expect(messageSchema.version).toBe(2);
+  it("migrates old single-channel messages", () => {
+    expect(messageSchema.version).toBe(3);
     expect(messageMigrationStrategies[1](sample)).toBe(sample);
     expect(messageMigrationStrategies[2](sample)).toBe(sample);
+    expect(
+      messageMigrationStrategies[3]({
+        id: "message-2",
+        channelId: "links",
+        text: "hello",
+        createdAt: 1,
+        updatedAt: 2,
+      }),
+    ).toEqual({
+      id: "message-2",
+      channelIds: ["links"],
+      text: "hello",
+      createdAt: 1,
+      updatedAt: 2,
+    });
   });
 });
 

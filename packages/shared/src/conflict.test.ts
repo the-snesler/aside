@@ -4,7 +4,7 @@ import type { ReplicatedMessageDoc } from "./types.js";
 
 const base: ReplicatedMessageDoc = {
   id: "message-1",
-  channelId: "general",
+  channelIds: ["general"],
   text: "hello",
   createdAt: 1,
   updatedAt: 10,

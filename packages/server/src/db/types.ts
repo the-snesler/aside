@@ -6,6 +6,7 @@
 export interface MessagesTable {
   id: string;
   channel_id: string;
+  channel_ids: string | null;
   text: string;
   created_at: number;
   updated_at: number;

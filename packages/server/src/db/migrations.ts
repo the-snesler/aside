@@ -11,6 +11,7 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .ifNotExists()
     .addColumn("id", "text", (c) => c.primaryKey())
     .addColumn("channel_id", "text", (c) => c.notNull())
+    .addColumn("channel_ids", "text")
     .addColumn("text", "text", (c) => c.notNull())
     .addColumn("created_at", "integer", (c) => c.notNull())
     .addColumn("updated_at", "integer", (c) => c.notNull())
@@ -19,6 +20,7 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .execute();
 
   await ensureSeqColumn(db);
+  await ensureMessageChannelIdsColumn(db);
   await backfillSeq(db);
 
   // Pull orders by seq; this index keeps that scan cheap.
@@ -221,6 +223,37 @@ async function ensureSeqColumn(db: Kysely<Database>): Promise<void> {
     await db.schema
       .alterTable("messages")
       .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
+      .execute();
+  }
+}
+
+async function ensureMessageChannelIdsColumn(
+  db: Kysely<Database>,
+): Promise<void> {
+  const tables = await db.introspection.getTables();
+  const messages = tables.find((table) => table.name === "messages");
+  const hasChannelIds = messages?.columns.some(
+    (column) => column.name === "channel_ids",
+  );
+
+  if (!hasChannelIds) {
+    await db.schema
+      .alterTable("messages")
+      .addColumn("channel_ids", "text")
+      .execute();
+  }
+
+  const rows = await db
+    .selectFrom("messages")
+    .select(["id", "channel_id"])
+    .where("channel_ids", "is", null)
+    .execute();
+
+  for (const row of rows) {
+    await db
+      .updateTable("messages")
+      .set({ channel_ids: JSON.stringify([row.channel_id]) })
+      .where("id", "=", row.id)
       .execute();
   }
 }

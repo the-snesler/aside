@@ -14,6 +14,7 @@ import {
 import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
+import { addMessageChannel } from "./features/channels/membership";
 import { MessageList } from "./features/messages/MessageList";
 import { SearchPalette } from "./features/search/SearchPalette";
 import { useSearchIndex } from "./features/search/searchIndex";
@@ -206,6 +207,24 @@ function Workspace({
     [onSelect],
   );
 
+  const handleDropMessage = useCallback(
+    (channelId: string, messageId: string) => {
+      void db.messages
+        .findOne(messageId)
+        .exec()
+        .then((message) => {
+          if (!message) return;
+          const channelIds = addMessageChannel(message, channelId);
+          if (channelIds.join("\0") === message.channelIds.join("\0")) return;
+          return message.incrementalPatch({
+            channelIds,
+            updatedAt: Date.now(),
+          });
+        });
+    },
+    [db.messages],
+  );
+
   // The sidebar is its own gradient plane; the feed is a separate white card that
   // floats on top of it (a slight overlap, raised z-index + shadow) rather than
   // sharing one rounded container — so the chrome reads as a layer behind the
@@ -221,6 +240,7 @@ function Workspace({
         onOpenSettings={() => selectView(SETTINGS_ID)}
         onOpenSearch={() => setPaletteOpen(true)}
         onLogout={onLogout}
+        onDropMessage={handleDropMessage}
       />
       <div
         {...bindDrag()}
@@ -354,7 +374,7 @@ function AuthScreen({
 
 /**
  * Ensures the default channel exists so messages written before there was a
- * channel UI (which carry `channelId: "general"`) have a home. Uses a fixed id
+ * channel UI (which carry `channelIds: ["general"]`) have a home. Uses a fixed id
  * and `upsert`, so a race across devices converges through the conflict handler
  * instead of throwing on a duplicate insert.
  */

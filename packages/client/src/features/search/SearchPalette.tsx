@@ -12,6 +12,7 @@ import IconHash from "~icons/lucide/hash";
 import IconSearch from "~icons/lucide/search";
 import IconX from "~icons/lucide/x";
 import { channelColor } from "../channels/channelColor";
+import { isSmartView } from "../views";
 import { buildSnippet } from "./highlight";
 import type { SearchChannel, SearchNote, SearchSort } from "./searchIndex";
 
@@ -80,7 +81,13 @@ export function SearchPalette({
 
   function selectItem(item: PaletteItem) {
     if (item.kind === "channel") onSelectView(item.channel.id);
-    else onNavigateToNote(item.note.channelId, item.note.id);
+    else {
+      const targetChannelId =
+        !isSmartView(activeView) && item.note.channelIds.includes(activeView)
+          ? activeView
+          : item.note.channelIds[0];
+      onNavigateToNote(targetChannelId, item.note.id);
+    }
     onClose();
   }
 
@@ -208,14 +215,18 @@ export function SearchPalette({
                       (item) =>
                         item.kind === "note" && item.note.id === note.id,
                     );
-                    const channel = channels.find(
-                      (candidate) => candidate.id === note.channelId,
-                    );
+                    const channelNames = note.channelIds
+                      .map(
+                        (id) =>
+                          channels.find((candidate) => candidate.id === id)
+                            ?.name,
+                      )
+                      .filter((name): name is string => !!name);
                     return (
                       <NoteRow
                         key={note.id}
                         note={note}
-                        channelName={channel?.name ?? "unknown"}
+                        channelName={channelNames.join(", ") || "unknown"}
                         active={index === selectedIndex}
                         onSelect={() => selectItem({ kind: "note", note })}
                       />
