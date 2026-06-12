@@ -496,6 +496,7 @@ export function MessageList({
             increaseViewportBy={600}
             computeItemKey={(_index, row) => row.key}
             components={listComponents}
+            className="h-full"
             itemContent={(_index, row) =>
               row.type === "day" ? (
                 <div className="flex items-center gap-3 pb-1 pt-4">
@@ -521,8 +522,6 @@ export function MessageList({
                 />
               )
             }
-            className="px-4 md:px-6"
-            style={{ height: "100%" }}
           />
         )}
       </div>
@@ -680,7 +679,7 @@ function MessageRow({
 }) {
   return (
     <div
-      className={`group relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${highlighted ? "bg-active ring-2 ring-accent/60" : ""
+      className={`group w-full relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${highlighted ? "bg-active ring-2 ring-accent/60" : ""
         }`}
     >
       <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
@@ -786,7 +785,7 @@ function headerMeta(
  * Renders a message's attachments below its body (ATT-3): images as inline
  * preview cards (linking to the full blob), other files as a download chip.
  */
-function AttachmentCards({ items }: { items?: RxDocument<AttachmentDoc>[] }) {
+export function AttachmentCards({ items }: { items?: RxDocument<AttachmentDoc>[] }) {
   if (!items || items.length === 0) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-2">
