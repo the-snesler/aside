@@ -9,7 +9,9 @@ import IconCopy from "~icons/lucide/copy";
 import IconPencil from "~icons/lucide/pencil";
 import IconTags from "~icons/lucide/tags";
 import IconTrash from "~icons/lucide/trash-2";
+import { blobUrl } from "../attachments/api";
 import { messageChannelIds } from "../channels/membership";
+import { useLightbox, type LightboxImage } from "../lightbox/LightboxProvider";
 import { AttachmentCards } from "./AttachmentCards";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { Markdown } from "./Markdown";
@@ -54,11 +56,43 @@ export function MessageRow({
     channelId: string,
   ) => Promise<void>;
 }) {
+  const lightbox = useLightbox();
   const channelIds = messageChannelIds(doc);
   const channelLabel = channelIds
     .map((channelId) => channelNames.get(channelId))
     .filter((name): name is string => !!name)
     .join(", ");
+
+  // The message's previewable images, in visual order (embeds render above
+  // attachments), so the lightbox can arrow across all of them as one set.
+  const embedImages = (embeds ?? []).filter(
+    (embed): embed is EmbedDoc & { image: string } => !!embed.image,
+  );
+  const attachmentImages = (attachments ?? []).filter((a) =>
+    a.mimeType.startsWith("image/"),
+  );
+  const messageImages: LightboxImage[] = [
+    ...embedImages.map((embed) => ({
+      src: embed.image,
+      caption: embed.title ?? embed.siteName,
+      sourceUrl: embed.url,
+    })),
+    ...attachmentImages.map((a) => ({
+      src: blobUrl(a.blobHash),
+      downloadUrl: blobUrl(a.blobHash),
+      caption: a.fileName,
+    })),
+  ];
+
+  function openEmbedImage(embed: EmbedDoc) {
+    const i = embedImages.findIndex((candidate) => candidate.id === embed.id);
+    if (i !== -1) lightbox.open(messageImages, i);
+  }
+
+  function openAttachmentImage(attachment: RxDocument<AttachmentDoc>) {
+    const i = attachmentImages.indexOf(attachment);
+    if (i !== -1) lightbox.open(messageImages, embedImages.length + i);
+  }
 
   return (
     <div
@@ -108,9 +142,18 @@ export function MessageRow({
               <Markdown text={doc.text} className="break-words text-ink" />
             )}
             {embeds?.map((embed) => (
-              <LinkPreviewCard key={embed.id} embed={embed} />
+              <LinkPreviewCard
+                key={embed.id}
+                embed={embed}
+                onPreviewImage={
+                  embed.image ? () => openEmbedImage(embed) : undefined
+                }
+              />
             ))}
-            <AttachmentCards items={attachments} />
+            <AttachmentCards
+              items={attachments}
+              onPreviewImage={openAttachmentImage}
+            />
           </>
         )}
       </div>

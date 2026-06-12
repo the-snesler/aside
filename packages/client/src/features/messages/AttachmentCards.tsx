@@ -5,32 +5,52 @@ import { blobUrl } from "../attachments/api";
 
 /**
  * Renders a message's attachments below its body (ATT-3): images as inline
- * preview cards (linking to the full blob), other files as a download chip.
+ * preview cards, other files as a download chip. When `onPreviewImage` is
+ * provided, clicking an image opens the lightbox; otherwise it falls back to
+ * opening the full blob in a new tab.
  */
 export function AttachmentCards({
   items,
+  onPreviewImage,
 }: {
   items?: RxDocument<AttachmentDoc>[];
+  onPreviewImage?: (attachment: RxDocument<AttachmentDoc>) => void;
 }) {
   if (!items || items.length === 0) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-2">
       {items.map((a) =>
         a.mimeType.startsWith("image/") ? (
-          <a
-            key={a.id}
-            href={blobUrl(a.blobHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block"
-          >
-            <img
-              src={blobUrl(a.blobHash)}
-              alt={a.fileName}
-              loading="lazy"
-              className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
-            />
-          </a>
+          onPreviewImage ? (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => onPreviewImage(a)}
+              className="block cursor-zoom-in"
+            >
+              <img
+                src={blobUrl(a.blobHash)}
+                alt={a.fileName}
+                loading="lazy"
+                className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
+              />
+            </button>
+          ) : (
+            <a
+              key={a.id}
+              href={blobUrl(a.blobHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <img
+                src={blobUrl(a.blobHash)}
+                alt={a.fileName}
+                loading="lazy"
+                className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
+              />
+            </a>
+          )
         ) : (
           <a
             key={a.id}

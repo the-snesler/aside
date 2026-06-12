@@ -15,6 +15,7 @@ import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
 import { addMessageChannel } from "./features/channels/membership";
+import { LightboxProvider } from "./features/lightbox/LightboxProvider";
 import { MessageList } from "./features/messages/MessageList";
 import { SearchPalette } from "./features/search/SearchPalette";
 import { useSearchIndex } from "./features/search/searchIndex";
@@ -231,57 +232,59 @@ function Workspace({
   // content. On mobile the sidebar sits underneath and the content layer slides
   // aside to expose it.
   return (
-    <div className="relative flex h-full overflow-hidden md:p-2">
-      <ChannelSidebar
-        collection={db.channels}
-        counts={counts}
-        selectedView={view}
-        onSelect={selectView}
-        onOpenSettings={() => selectView(SETTINGS_ID)}
-        onOpenSearch={() => setPaletteOpen(true)}
-        onLogout={onLogout}
-        onDropMessage={handleDropMessage}
-      />
-      <div
-        {...bindDrag()}
-        className="relative z-10 flex h-full min-w-0 flex-1 translate-x-[var(--sidebar-offset)] touch-pan-y transition-transform duration-200 ease-out md:translate-x-0"
-        style={
-          {
-            "--sidebar-offset": sidebarOpen ? "280px" : "0px",
-          } as React.CSSProperties
-        }
-      >
-        {view === SETTINGS_ID ? (
-          <SettingsPage
-            channels={db.channels}
-            config={db.config}
-            onOpenMenu={() => setSidebarOpen(true)}
-          />
-        ) : (
-          <MessageList
-            messages={db.messages}
-            channels={db.channels}
-            embeds={db.embeds}
-            attachments={db.attachments}
-            view={view}
-            counts={counts}
-            onOpenMenu={() => setSidebarOpen(true)}
-            onOpenSettings={() => selectView(SETTINGS_ID)}
-            onOpenSearch={() => setPaletteOpen(true)}
-            focusedMessageId={focusedMessageId}
-          />
-        )}
+    <LightboxProvider>
+      <div className="relative flex h-full overflow-hidden md:p-2">
+        <ChannelSidebar
+          collection={db.channels}
+          counts={counts}
+          selectedView={view}
+          onSelect={selectView}
+          onOpenSettings={() => selectView(SETTINGS_ID)}
+          onOpenSearch={() => setPaletteOpen(true)}
+          onLogout={onLogout}
+          onDropMessage={handleDropMessage}
+        />
+        <div
+          {...bindDrag()}
+          className="relative z-10 flex h-full min-w-0 flex-1 translate-x-[var(--sidebar-offset)] touch-pan-y transition-transform duration-200 ease-out md:translate-x-0"
+          style={
+            {
+              "--sidebar-offset": sidebarOpen ? "280px" : "0px",
+            } as React.CSSProperties
+          }
+        >
+          {view === SETTINGS_ID ? (
+            <SettingsPage
+              channels={db.channels}
+              config={db.config}
+              onOpenMenu={() => setSidebarOpen(true)}
+            />
+          ) : (
+            <MessageList
+              messages={db.messages}
+              channels={db.channels}
+              embeds={db.embeds}
+              attachments={db.attachments}
+              view={view}
+              counts={counts}
+              onOpenMenu={() => setSidebarOpen(true)}
+              onOpenSettings={() => selectView(SETTINGS_ID)}
+              onOpenSearch={() => setPaletteOpen(true)}
+              focusedMessageId={focusedMessageId}
+            />
+          )}
+        </div>
+        <SearchPalette
+          open={paletteOpen}
+          activeView={view}
+          channels={channels}
+          search={search}
+          onClose={() => setPaletteOpen(false)}
+          onSelectView={selectView}
+          onNavigateToNote={handleNavigateToNote}
+        />
       </div>
-      <SearchPalette
-        open={paletteOpen}
-        activeView={view}
-        channels={channels}
-        search={search}
-        onClose={() => setPaletteOpen(false)}
-        onSelectView={selectView}
-        onNavigateToNote={handleNavigateToNote}
-      />
-    </div>
+    </LightboxProvider>
   );
 }
 

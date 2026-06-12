@@ -2,6 +2,8 @@ import type { EmbedDoc } from "@aside/shared";
 
 interface Props {
   embed: EmbedDoc;
+  /** When set and the embed has an image, clicking the thumbnail opens it in the lightbox. */
+  onPreviewImage?: () => void;
 }
 
 /**
@@ -10,7 +12,7 @@ interface Props {
  * `embeds` collection, so this is purely presentational. Styled to match the
  * app's card surfaces (see FeedSettings) with a Discord-style accent rail.
  */
-export function LinkPreviewCard({ embed }: Props) {
+export function LinkPreviewCard({ embed, onPreviewImage }: Props) {
   return (
     <a
       href={embed.url}
@@ -33,19 +35,41 @@ export function LinkPreviewCard({ embed }: Props) {
           </p>
         )}
       </div>
-      {embed.image && (
-        <img
-          src={embed.image}
-          alt=""
-          loading="lazy"
-          // Drop the thumbnail if the remote image fails rather than show a
-          // broken-image glyph.
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-          className="h-16 w-16 shrink-0 rounded object-cover"
-        />
-      )}
+      {embed.image &&
+        (onPreviewImage ? (
+          <button
+            type="button"
+            // Open the image in the lightbox without following the card's link.
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onPreviewImage();
+            }}
+            className="shrink-0 cursor-zoom-in"
+          >
+            <img
+              src={embed.image}
+              alt=""
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+              className="h-16 w-16 rounded object-cover"
+            />
+          </button>
+        ) : (
+          <img
+            src={embed.image}
+            alt=""
+            loading="lazy"
+            // Drop the thumbnail if the remote image fails rather than show a
+            // broken-image glyph.
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+            className="h-16 w-16 shrink-0 rounded object-cover"
+          />
+        ))}
     </a>
   );
 }
