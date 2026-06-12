@@ -1,10 +1,12 @@
 import { DEFAULT_CHANNEL_ID } from "@aside/shared";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
 import { FeedSettings } from "./features/feeds/FeedSettings";
 import { MessageList } from "./features/messages/MessageList";
+import { SearchPalette } from "./features/search/SearchPalette";
+import { useSearchIndex } from "./features/search/searchIndex";
 import { ALL_ID, useNoteCounts } from "./features/views";
 import { useTheme } from "./theme";
 
@@ -60,9 +62,31 @@ function Workspace({
   onSelect: (view: string) => void;
 }) {
   const counts = useNoteCounts(db.messages, db.attachments);
+  const { channels, search } = useSearchIndex(db);
   // The settings modal is shared: opened from the sidebar gear (desktop) and the
   // feed header gear (mobile), so it lives here rather than in either child.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleNavigateToNote = useCallback(
+    (channelId: string, messageId: string) => {
+      onSelect(channelId);
+      setFocusedMessageId(messageId);
+    },
+    [onSelect],
+  );
 
   // The sidebar is its own gradient plane; the feed is a separate white card that
   // floats on top of it (a slight overlap, raised z-index + shadow) rather than
@@ -76,6 +100,7 @@ function Workspace({
         selectedView={view}
         onSelect={onSelect}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSearch={() => setPaletteOpen(true)}
       />
       <MessageList
         messages={db.messages}
@@ -86,11 +111,22 @@ function Workspace({
         onSelectView={onSelect}
         counts={counts}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSearch={() => setPaletteOpen(true)}
+        focusedMessageId={focusedMessageId}
       />
       <FeedSettings
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         channels={db.channels}
+      />
+      <SearchPalette
+        open={paletteOpen}
+        activeView={view}
+        channels={channels}
+        search={search}
+        onClose={() => setPaletteOpen(false)}
+        onSelectView={onSelect}
+        onNavigateToNote={handleNavigateToNote}
       />
     </div>
   );
