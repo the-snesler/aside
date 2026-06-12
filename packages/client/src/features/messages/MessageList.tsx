@@ -4,15 +4,12 @@ import {
   type EmbedDoc,
   type MessageDoc,
 } from "@aside/shared";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+  Virtuoso,
+  type Components,
+  type VirtuosoHandle,
+} from "react-virtuoso";
 import type { RxDocument } from "rxdb";
 import IconArrowUp from "~icons/lucide/arrow-up";
 import IconCopy from "~icons/lucide/copy";
@@ -77,8 +74,10 @@ interface PendingAttachment {
 
 const PAGE_SIZE = 50;
 const SCAN_SIZE = 160;
-const TOP_LOAD_PX = 120;
-const SCROLL_END_THRESHOLD = 80;
+// Virtuoso anchors prepended rows by index: we start at a large constant and
+// decrement it by the number of rows added to the front, which keeps the
+// viewport pinned to the same note as older history loads in (no scroll jump).
+const START_INDEX = 100_000;
 
 export function MessageList({
   messages,
@@ -115,15 +114,21 @@ export function MessageList({
 
   const composerRef = useRef<MarkdownEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const oldestCursorRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const loadingOlderRef = useRef(false);
+  // Mirrors `docs` so loadOlder can measure how many rows a page prepends
+  // without recreating the callback on every change.
+  const docsRef = useRef<RxDocument<MessageDoc>[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [liveAfter, setLiveAfter] = useState<number | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const [didInitialScroll, setDidInitialScroll] = useState(false);
+  // Virtuoso is mounted only once the first page has resolved, so its
+  // initialTopMostItemIndex sees the real row count and opens at the newest note.
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [autoHistoryEnabled, setAutoHistoryEnabled] = useState(false);
 
   useEffect(() => {
@@ -173,13 +178,20 @@ export function MessageList({
     return ids;
   }, [attachmentsByMessage]);
 
+  useEffect(() => {
+    docsRef.current = docs;
+  }, [docs]);
+
   const loadInitial = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     oldestCursorRef.current = null;
     setDocs([]);
     setHasMore(true);
     setLiveAfter(null);
-    setDidInitialScroll(false);
+    // Unmount Virtuoso and reset its prepend anchor so the next mount opens at
+    // the bottom of the freshly loaded view rather than restoring a stale offset.
+    setInitialLoadDone(false);
+    setFirstItemIndex(START_INDEX);
 
     const page = await fetchPage(messages, view, imageMessageIds, null);
     if (requestId !== requestIdRef.current) return;
@@ -187,6 +199,7 @@ export function MessageList({
     setDocs(page.docs);
     setHasMore(page.hasMore);
     setLiveAfter(page.docs.at(-1)?.createdAt ?? Date.now());
+    setInitialLoadDone(true);
   }, [imageMessageIds, messages, view]);
 
   useEffect(() => {
@@ -203,7 +216,14 @@ export function MessageList({
       const page = await fetchPage(messages, view, imageMessageIds, cursor);
       oldestCursorRef.current = page.nextCursor;
       setHasMore(page.hasMore);
-      setDocs((prev) => mergeDocs(page.docs, prev));
+      // How many rows land at the front (older messages can add day headers).
+      // Decrementing firstItemIndex by that count tells Virtuoso the existing
+      // rows kept their absolute index, so it holds the scroll position.
+      const prev = docsRef.current;
+      const prepended =
+        rowsByDay(mergeDocs(page.docs, prev)).length - rowsByDay(prev).length;
+      if (prepended > 0) setFirstItemIndex((index) => index - prepended);
+      setDocs((current) => mergeDocs(page.docs, current));
     } finally {
       loadingOlderRef.current = false;
       setLoadingOlder(false);
@@ -228,42 +248,19 @@ export function MessageList({
   }, [imageMessageIds, liveAfter, messages, view]);
 
   const rows = useMemo(() => rowsByDay(docs), [docs]);
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index]?.type === "day" ? 34 : 96),
-    getItemKey: useCallback(
-      (index: number) => rows[index]?.key ?? index,
-      [rows],
-    ),
-    anchorTo: "end",
-    followOnAppend: true,
-    scrollEndThreshold: SCROLL_END_THRESHOLD,
-    overscan: 8,
-    directDomUpdates: true,
-  });
-
-  useLayoutEffect(() => {
-    if (didInitialScroll || rows.length === 0) return;
-    rowVirtualizer.scrollToEnd();
-    setDidInitialScroll(true);
-  }, [didInitialScroll, rowVirtualizer, rows.length]);
 
   useEffect(() => {
+    // Briefly ignore startReached after a view switch so Virtuoso's initial
+    // measurement (which can momentarily report the top) doesn't trigger a load.
     setAutoHistoryEnabled(false);
     const handle = window.setTimeout(() => setAutoHistoryEnabled(true), 250);
     return () => window.clearTimeout(handle);
   }, [view]);
 
-  const handleScroll = useCallback(() => {
-    if (!autoHistoryEnabled || rowVirtualizer.isAtEnd(SCROLL_END_THRESHOLD)) {
-      return;
-    }
-    const scrollEl = scrollRef.current;
-    if (!scrollEl || loadingOlderRef.current || !hasMore) return;
-    if (scrollEl.scrollTop > TOP_LOAD_PX) return;
+  const handleStartReached = useCallback(() => {
+    if (!autoHistoryEnabled || loadingOlderRef.current || !hasMore) return;
     void loadOlder();
-  }, [autoHistoryEnabled, hasMore, loadOlder, rowVirtualizer]);
+  }, [autoHistoryEnabled, hasMore, loadOlder]);
 
   const meta = headerMeta(view, channelNames, counts);
 
@@ -273,11 +270,15 @@ export function MessageList({
       (row) => row.type === "message" && row.doc.id === focusedMessageId,
     );
     if (index === -1) return;
-    rowVirtualizer.scrollToIndex(index, { align: "center" });
+    virtuosoRef.current?.scrollToIndex({
+      index,
+      align: "center",
+      behavior: "smooth",
+    });
     setHighlightedId(focusedMessageId);
     const handle = window.setTimeout(() => setHighlightedId(null), 1500);
     return () => window.clearTimeout(handle);
-  }, [focusedMessageId, rowVirtualizer, rows]);
+  }, [focusedMessageId, rows]);
 
   function addFiles(files: File[]) {
     // ATT-3: stage each file with an instant local thumbnail, then upload its
@@ -476,64 +477,54 @@ export function MessageList({
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-3 md:px-6"
-      >
-        {loadingOlder && (
-          <p className="px-2 py-2 text-center text-xs text-muted">
-            Loading older notes…
-          </p>
+      <div className="relative min-h-0 flex-1">
+        {initialLoadDone && (
+          <Virtuoso<TimelineRow, ListContext>
+            key={view}
+            ref={virtuosoRef}
+            data={rows}
+            context={{
+              loadingOlder,
+              hasMore,
+              hasRows: rows.length > 0,
+              smartView,
+            }}
+            firstItemIndex={firstItemIndex}
+            initialTopMostItemIndex={Math.max(0, rows.length - 1)}
+            followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
+            startReached={handleStartReached}
+            increaseViewportBy={600}
+            computeItemKey={(_index, row) => row.key}
+            components={listComponents}
+            itemContent={(_index, row) =>
+              row.type === "day" ? (
+                <div className="flex items-center gap-3 pb-1 pt-4">
+                  <span className="text-xs font-semibold text-muted">
+                    {row.label}
+                  </span>
+                  <span className="h-px flex-1 bg-divider" />
+                </div>
+              ) : (
+                <MessageRow
+                  doc={row.doc}
+                  smartView={smartView}
+                  channelName={channelNames.get(row.doc.channelId)}
+                  isEditing={editingId === row.doc.id}
+                  highlighted={highlightedId === row.doc.id}
+                  embeds={embedsByMessage.get(row.doc.id)}
+                  attachments={attachmentsByMessage.get(row.doc.id)}
+                  onStartEdit={startEdit}
+                  onCancelEdit={cancelEdit}
+                  onSaveEdit={saveEdit}
+                  onCopy={copyMessage}
+                  onDelete={deleteMessage}
+                />
+              )
+            }
+            className="px-4 md:px-6"
+            style={{ height: "100%" }}
+          />
         )}
-        {!hasMore && rows.length > 0 && (
-          <p className="px-2 py-2 text-center text-xs text-muted">
-            Beginning of history
-          </p>
-        )}
-        {rows.length === 0 && !loadingOlder && (
-          <p className="px-2 py-8 text-center text-sm text-muted">
-            {smartView ? "No notes here yet." : "No notes in this space yet."}
-          </p>
-        )}
-        <div ref={rowVirtualizer.containerRef} className="relative w-full">
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const row = rows[virtualRow.index];
-            if (!row) return null;
-            return (
-              <div
-                key={virtualRow.key}
-                ref={rowVirtualizer.measureElement}
-                data-index={virtualRow.index}
-                className="absolute left-0 top-0 w-full"
-              >
-                {row.type === "day" ? (
-                  <div className="mb-1 mt-4 flex items-center gap-3 first:mt-0">
-                    <span className="text-xs font-semibold text-muted">
-                      {row.label}
-                    </span>
-                    <span className="h-px flex-1 bg-divider" />
-                  </div>
-                ) : (
-                  <MessageRow
-                    doc={row.doc}
-                    smartView={smartView}
-                    channelName={channelNames.get(row.doc.channelId)}
-                    isEditing={editingId === row.doc.id}
-                    highlighted={highlightedId === row.doc.id}
-                    embeds={embedsByMessage.get(row.doc.id)}
-                    attachments={attachmentsByMessage.get(row.doc.id)}
-                    onStartEdit={startEdit}
-                    onCancelEdit={cancelEdit}
-                    onSaveEdit={saveEdit}
-                    onCopy={copyMessage}
-                    onDelete={deleteMessage}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       <div className="shrink-0 px-4 pb-4 pt-1 md:px-6">
@@ -614,6 +605,51 @@ export function MessageList({
     </main>
   );
 }
+
+/** Values Virtuoso threads into its Header/Footer/EmptyPlaceholder slots. */
+interface ListContext {
+  loadingOlder: boolean;
+  hasMore: boolean;
+  hasRows: boolean;
+  smartView: boolean;
+}
+
+/** Top-of-list status: the older-page spinner, then the start-of-history mark. */
+function ListHeader({ context }: { context?: ListContext }) {
+  return (
+    <div className="pt-3">
+      {context?.loadingOlder && (
+        <p className="px-2 py-2 text-center text-xs text-muted">
+          Loading older notes…
+        </p>
+      )}
+      {context && !context.hasMore && context.hasRows && (
+        <p className="px-2 py-2 text-center text-xs text-muted">
+          Beginning of history
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Breathing room below the newest note so it clears the composer. */
+function ListFooter() {
+  return <div className="h-3" />;
+}
+
+function ListEmpty({ context }: { context?: ListContext }) {
+  return (
+    <p className="px-2 py-8 text-center text-sm text-muted">
+      {context?.smartView ? "No notes here yet." : "No notes in this space yet."}
+    </p>
+  );
+}
+
+const listComponents: Components<TimelineRow, ListContext> = {
+  Header: ListHeader,
+  Footer: ListFooter,
+  EmptyPlaceholder: ListEmpty,
+};
 
 function MessageRow({
   doc,
