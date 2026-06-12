@@ -1,6 +1,7 @@
 import { DEFAULT_CHANNEL_ID, type ChannelDoc } from "@aside/shared";
 import { useEffect, useState } from "react";
 import type { RxDocument } from "rxdb";
+import IconImage from "~icons/lucide/image";
 import IconLink from "~icons/lucide/link";
 import IconList from "~icons/lucide/list";
 import IconLogOut from "~icons/lucide/log-out";
@@ -10,7 +11,13 @@ import IconSettings from "~icons/lucide/settings";
 import IconSparkles from "~icons/lucide/sparkles";
 import IconTrash from "~icons/lucide/trash-2";
 import type { ChannelCollection } from "../../db/database";
-import { ALL_ID, LINKS_ID, TODAY_ID, type NoteCounts } from "../views";
+import {
+  ALL_ID,
+  LINKS_ID,
+  PHOTOS_ID,
+  TODAY_ID,
+  type NoteCounts,
+} from "../views";
 import { channelColor } from "./channelColor";
 import { slugifyChannelName } from "./channelName";
 
@@ -92,10 +99,11 @@ export function ChannelSidebar({
     { id: ALL_ID, label: "All Notes", Icon: IconList, count: counts.all },
     { id: TODAY_ID, label: "Today", Icon: IconSparkles, count: counts.today },
     { id: LINKS_ID, label: "Links", Icon: IconLink, count: counts.links },
+    { id: PHOTOS_ID, label: "Photos", Icon: IconImage, count: counts.photos },
   ];
 
   return (
-    <aside className="hidden h-full min-h-0 w-[268px] shrink-0 flex-col overflow-hidden md:flex md:pr-5">
+    <aside className="absolute inset-y-0 left-0 z-0 flex h-full min-h-0 w-[280px] shrink-0 flex-col overflow-hidden pr-3 md:relative md:w-[268px] md:pr-5">
       <header className="flex h-14 shrink-0 items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <img src="/aside-logo.svg" alt="" className="h-7 w-7" />
@@ -105,8 +113,8 @@ export function ChannelSidebar({
           <button
             type="button"
             onClick={onOpenSettings}
-            aria-label="Feeds settings"
-            title="Feeds"
+            aria-label="Settings"
+            title="Settings"
             className="rounded-lg p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink"
           >
             <IconSettings className="h-4 w-4" />

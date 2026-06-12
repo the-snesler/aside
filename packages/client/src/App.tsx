@@ -1,4 +1,6 @@
 import { DEFAULT_CHANNEL_ID } from "@aside/shared";
+import { useDrag } from "@use-gesture/react";
+import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
   clearAuthToken,
@@ -12,11 +14,11 @@ import {
 import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
-import { FeedSettings } from "./features/feeds/FeedSettings";
 import { MessageList } from "./features/messages/MessageList";
 import { SearchPalette } from "./features/search/SearchPalette";
 import { useSearchIndex } from "./features/search/searchIndex";
-import { ALL_ID, useNoteCounts } from "./features/views";
+import { SettingsPage } from "./features/settings/SettingsPage";
+import { ALL_ID, SETTINGS_ID, useNoteCounts } from "./features/views";
 import { useTheme } from "./theme";
 
 type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
@@ -148,7 +150,9 @@ function AuthedApp({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  return <Workspace db={db} view={view} onSelect={setView} onLogout={onLogout} />;
+  return (
+    <Workspace db={db} view={view} onSelect={setView} onLogout={onLogout} />
+  );
 }
 
 function Workspace({
@@ -164,9 +168,7 @@ function Workspace({
 }) {
   const counts = useNoteCounts(db.messages, db.attachments);
   const { channels, search } = useSearchIndex(db);
-  // The settings modal is shared: opened from the sidebar gear (desktop) and the
-  // feed header gear (mobile), so it lives here rather than in either child.
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
 
@@ -181,9 +183,24 @@ function Workspace({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const bindDrag = useDrag(
+    ({ last, movement: [mx], velocity: [vx], direction: [dx] }) => {
+      if (!last) return;
+      if (dx > 0 && (mx > 64 || vx > 0.45)) setSidebarOpen(true);
+      if (dx < 0 && (mx < -64 || vx > 0.45)) setSidebarOpen(false);
+    },
+    { axis: "x", filterTaps: true },
+  );
+
+  function selectView(nextView: string) {
+    onSelect(nextView);
+    setSidebarOpen(false);
+  }
+
   const handleNavigateToNote = useCallback(
     (channelId: string, messageId: string) => {
       onSelect(channelId);
+      setSidebarOpen(false);
       setFocusedMessageId(messageId);
     },
     [onSelect],
@@ -192,42 +209,52 @@ function Workspace({
   // The sidebar is its own gradient plane; the feed is a separate white card that
   // floats on top of it (a slight overlap, raised z-index + shadow) rather than
   // sharing one rounded container — so the chrome reads as a layer behind the
-  // content. On mobile the sidebar is hidden and the feed fills the screen.
+  // content. On mobile the sidebar sits underneath and the content layer slides
+  // aside to expose it.
   return (
-    <div className="flex h-full md:p-2">
+    <div className="relative flex h-full overflow-hidden md:p-2">
       <ChannelSidebar
         collection={db.channels}
         counts={counts}
         selectedView={view}
-        onSelect={onSelect}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onSelect={selectView}
+        onOpenSettings={() => selectView(SETTINGS_ID)}
         onOpenSearch={() => setPaletteOpen(true)}
         onLogout={onLogout}
       />
-      <MessageList
-        messages={db.messages}
-        channels={db.channels}
-        embeds={db.embeds}
-        attachments={db.attachments}
-        view={view}
-        onSelectView={onSelect}
-        counts={counts}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenSearch={() => setPaletteOpen(true)}
-        focusedMessageId={focusedMessageId}
-      />
-      <FeedSettings
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        channels={db.channels}
-      />
+      <div
+        {...bindDrag()}
+        className="relative z-10 flex h-full min-w-0 flex-1 translate-x-[var(--sidebar-offset)] touch-pan-y transition-transform duration-200 ease-out md:translate-x-0"
+        style={
+          {
+            "--sidebar-offset": sidebarOpen ? "280px" : "0px",
+          } as React.CSSProperties
+        }
+      >
+        {view === SETTINGS_ID ? (
+          <SettingsPage onOpenMenu={() => setSidebarOpen(true)} />
+        ) : (
+          <MessageList
+            messages={db.messages}
+            channels={db.channels}
+            embeds={db.embeds}
+            attachments={db.attachments}
+            view={view}
+            counts={counts}
+            onOpenMenu={() => setSidebarOpen(true)}
+            onOpenSettings={() => selectView(SETTINGS_ID)}
+            onOpenSearch={() => setPaletteOpen(true)}
+            focusedMessageId={focusedMessageId}
+          />
+        )}
+      </div>
       <SearchPalette
         open={paletteOpen}
         activeView={view}
         channels={channels}
         search={search}
         onClose={() => setPaletteOpen(false)}
-        onSelectView={onSelect}
+        onSelectView={selectView}
         onNavigateToNote={handleNavigateToNote}
       />
     </div>

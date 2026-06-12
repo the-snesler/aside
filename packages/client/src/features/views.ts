@@ -14,6 +14,7 @@ export const ALL_ID = HOME_ID;
 export const TODAY_ID = "__today__";
 export const LINKS_ID = "__links__";
 export const PHOTOS_ID = "__photos__";
+export const SETTINGS_ID = "__settings__";
 
 const SMART_VIEW_IDS = new Set<string>([ALL_ID, TODAY_ID, LINKS_ID, PHOTOS_ID]);
 
