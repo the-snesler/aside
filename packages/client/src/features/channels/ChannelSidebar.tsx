@@ -29,7 +29,6 @@ interface Props {
   onOpenSettings: () => void;
   onOpenSearch: () => void;
   onLogout: () => void;
-  onDropMessage: (channelId: string, messageId: string) => void;
 }
 
 export function ChannelSidebar({
@@ -40,10 +39,8 @@ export function ChannelSidebar({
   onOpenSettings,
   onOpenSearch,
   onLogout,
-  onDropMessage,
 }: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [creating, setCreating] = useState(false);
@@ -157,11 +154,10 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-active text-ink shadow-sm"
-                      : "text-ink/80 hover:bg-hover"
-                  }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
+                    ? "bg-active text-ink shadow-sm"
+                    : "text-ink/80 hover:bg-hover"
+                    }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -201,34 +197,7 @@ export function ChannelSidebar({
                     className="w-full rounded-xl bg-panel px-3 py-1.5 text-sm text-ink outline-none ring-1 ring-accent"
                   />
                 ) : (
-                  <div
-                    onDragOver={(e) => {
-                      if (
-                        e.dataTransfer.types.includes(
-                          "application/x-aside-message-id",
-                        )
-                      ) {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "copy";
-                        setDragOverId(doc.id);
-                      }
-                    }}
-                    onDragLeave={() => setDragOverId(null)}
-                    onDrop={(e) => {
-                      const messageId = e.dataTransfer.getData(
-                        "application/x-aside-message-id",
-                      );
-                      setDragOverId(null);
-                      if (!messageId) return;
-                      e.preventDefault();
-                      onDropMessage(doc.id, messageId);
-                    }}
-                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${
-                      active || dragOverId === doc.id
-                        ? "bg-active text-ink shadow-sm"
-                        : "hover:bg-hover"
-                    }`}
-                  >
+                  <div className="group relative">
                     <button
                       type="button"
                       onClick={() => onSelect(doc.id)}
@@ -236,7 +205,8 @@ export function ChannelSidebar({
                         setEditingId(doc.id);
                         setEditDraft(doc.name);
                       }}
-                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
+                        }`}
                       title="Click to open · double-click to rename"
                     >
                       <span
@@ -246,22 +216,22 @@ export function ChannelSidebar({
                       <span className="min-w-0 flex-1 truncate text-sm text-ink/90">
                         <span className="text-muted">#</span> {doc.name}
                       </span>
+                      <span
+                        className={`shrink-0 text-xs tabular-nums ${active ? "text-accent" : "text-muted"} ${doc.id !== DEFAULT_CHANNEL_ID ? "group-hover:opacity-0" : ""}`}
+                      >
+                        {count}
+                      </span>
                     </button>
                     {doc.id !== DEFAULT_CHANNEL_ID && (
                       <button
                         type="button"
                         onClick={() => void deleteChannel(doc)}
                         aria-label={`Delete #${doc.name}`}
-                        className="hidden shrink-0 rounded p-0.5 text-muted hover:text-danger group-hover:block"
+                        className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted hover:text-danger group-hover:block"
                       >
                         <IconTrash className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <span
-                      className={`shrink-0 text-xs tabular-nums ${active ? "text-accent" : "text-muted"} ${doc.id !== DEFAULT_CHANNEL_ID ? "group-hover:hidden" : ""}`}
-                    >
-                      {count}
-                    </span>
                   </div>
                 )}
               </li>
