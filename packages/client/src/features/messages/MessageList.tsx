@@ -6,48 +6,35 @@ import {
   type MessageDoc,
 } from "@aside/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso, type Components, type VirtuosoHandle } from "react-virtuoso";
-import type { MangoQuerySelector, RxDocument } from "rxdb";
-import IconArrowUp from "~icons/lucide/arrow-up";
-import IconCopy from "~icons/lucide/copy";
-import IconHash from "~icons/lucide/hash";
-import IconImage from "~icons/lucide/image";
-import IconLink from "~icons/lucide/link";
-import IconList from "~icons/lucide/list";
-import IconMenu from "~icons/lucide/menu";
-import IconPaperclip from "~icons/lucide/paperclip";
-import IconPencil from "~icons/lucide/pencil";
-import IconSearch from "~icons/lucide/search";
-import IconSettings from "~icons/lucide/settings";
-import IconSparkles from "~icons/lucide/sparkles";
-import IconTags from "~icons/lucide/tags";
-import IconTrash from "~icons/lucide/trash-2";
-import IconX from "~icons/lucide/x";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import type { RxDocument } from "rxdb";
 import type {
   AttachmentCollection,
   ChannelCollection,
   EmbedCollection,
   MessageCollection,
 } from "../../db/database";
+import { uploadBlob } from "../attachments/api";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
 import {
   addMessageChannel,
   messageChannelIds,
   removeMessageChannel,
 } from "../channels/membership";
+import { isSmartView, matchesView, type NoteCounts } from "../views";
+import type { MarkdownEditorHandle } from "./MarkdownEditor";
+import { MessageComposer } from "./MessageComposer";
+import { headerMeta, MessageListHeader } from "./MessageListHeader";
+import { MessageRow } from "./MessageRow";
 import {
-  ALL_ID,
-  LINKS_ID,
-  PHOTOS_ID,
-  TODAY_ID,
-  isSmartView,
-  matchesView,
-  type NoteCounts,
-} from "../views";
-import { blobUrl, uploadBlob } from "../attachments/api";
-import { LinkPreviewCard } from "./LinkPreviewCard";
-import { Markdown } from "./Markdown";
-import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
+  fetchPage,
+  liveSelector,
+  mergeDocs,
+  rowsByDay,
+  type TimelineRow,
+} from "./timeline";
+import type { PendingAttachment } from "./types";
+import { listComponents, type ListContext } from "./virtuosoComponents";
 
 interface Props {
   messages: MessageCollection;
@@ -62,21 +49,6 @@ interface Props {
   focusedMessageId: string | null;
 }
 
-/** A file being uploaded for the next send (ATT-3). */
-interface PendingAttachment {
-  tempId: string;
-  fileName: string;
-  mimeType: string;
-  size: number;
-  /** object URL for an instant local thumbnail */
-  localUrl: string;
-  status: "uploading" | "done" | "error";
-  /** content hash, set once the upload resolves */
-  hash?: string;
-}
-
-const PAGE_SIZE = 50;
-const SCAN_SIZE = 160;
 // Virtuoso anchors prepended rows by index: we start at a large constant and
 // decrement it by the number of rows added to the front, which keeps the
 // viewport pinned to the same note as older history loads in (no scroll jump).
@@ -409,9 +381,9 @@ export function MessageList({
       setDocs((prev) => {
         return matchesView(view, updated, imageMessageIds)
           ? mergeDocs(
-              prev.filter((item) => item.id !== updated.id),
-              [updated],
-            )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
           : prev.filter((item) => item.id !== updated.id);
       });
       return;
@@ -448,9 +420,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
@@ -475,56 +447,24 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
 
   return (
     <main className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat md:-ml-5 md:rounded-[28px] md:shadow-xl md:ring-1 md:ring-black/5">
-      {/* Desktop header: current view + count. */}
-      <header className="hidden h-14 shrink-0 items-center gap-2.5 px-6 md:flex">
-        <meta.Icon className="h-5 w-5 text-accent" />
-        <h1 className="text-lg font-semibold text-ink">
-          {smartView ? meta.label : `#${meta.label}`}
-        </h1>
-        <span className="text-sm tabular-nums text-muted">{meta.count}</span>
-      </header>
-
-      {/* Mobile header: title row. Navigation lives in the swipe-revealed sidebar. */}
-      <div className="shrink-0 px-4 pt-4 md:hidden">
-        <div className="mb-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenMenu}
-            aria-label="Open sidebar"
-            className="rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconMenu className="h-5 w-5" />
-          </button>
-          <h1 className="flex-1 text-lg font-semibold text-ink">
-            {smartView ? meta.label : `#${meta.label}`}
-          </h1>
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            aria-label="Search"
-            className="rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconSearch className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            aria-label="Settings"
-            className="rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconSettings className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
+      <MessageListHeader
+        view={view}
+        smartView={smartView}
+        channelNames={channelNames}
+        counts={counts}
+        onOpenMenu={onOpenMenu}
+        onOpenSettings={onOpenSettings}
+        onOpenSearch={onOpenSearch}
+      />
 
       <div className="relative min-h-0 flex-1">
         {initialLoadDone && (
@@ -548,7 +488,7 @@ export function MessageList({
             className="h-full"
             itemContent={(_index, row) =>
               row.type === "day" ? (
-                <div className="flex items-center gap-3 pb-1 pt-4">
+                <div className="flex items-center gap-3 pb-1 pt-4 px-4">
                   <span className="text-xs font-semibold text-muted">
                     {row.label}
                   </span>
@@ -581,555 +521,16 @@ export function MessageList({
         )}
       </div>
 
-      <div className="shrink-0 px-4 pb-4 pt-1 md:px-6">
-        {pending.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {pending.map((item) => (
-              <div key={item.tempId} className="relative h-16 w-16">
-                {item.mimeType.startsWith("image/") ? (
-                  <img
-                    src={item.localUrl}
-                    alt={item.fileName}
-                    className="h-16 w-16 rounded-lg border border-divider object-cover"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-divider bg-rail text-muted">
-                    <IconPaperclip className="h-5 w-5" />
-                  </div>
-                )}
-                {item.status !== "done" && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 text-xs text-white">
-                    {item.status === "uploading" ? "…" : "!"}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => removePending(item.tempId)}
-                  aria-label="Remove attachment"
-                  className="absolute -right-1.5 -top-1.5 rounded-full bg-panel p-0.5 text-muted shadow ring-1 ring-divider hover:text-ink"
-                >
-                  <IconX className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-end gap-2 rounded-2xl bg-panel px-2.5 py-2 shadow-lg ring-1 ring-divider">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              if (files.length) addFiles(files);
-              e.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            aria-label="Attach files"
-            className="shrink-0 rounded-lg p-2 text-muted transition-colors hover:bg-hover hover:text-ink"
-          >
-            <IconImage className="h-5 w-5" />
-          </button>
-          <div className="min-w-0 flex-1 self-center">
-            <MarkdownEditor
-              key={composerKey}
-              ref={composerRef}
-              initialValue=""
-              autoFocus
-              placeholder={smartView ? "Jot a note…" : `Message #${meta.label}`}
-              onSubmit={(t) => void handleSend(t)}
-              onAddFiles={addFiles}
-              className="max-h-[40vh] w-full overflow-y-auto bg-transparent py-1.5 text-ink outline-none"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => composerRef.current?.submit()}
-            aria-label="Send note"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-md transition-opacity hover:opacity-90"
-          >
-            <IconArrowUp className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
+      <MessageComposer
+        pending={pending}
+        composerKey={composerKey}
+        composerRef={composerRef}
+        fileInputRef={fileInputRef}
+        placeholder={smartView ? "Jot a note…" : `Message #${meta.label}`}
+        onAddFiles={addFiles}
+        onRemovePending={removePending}
+        onSend={(text) => void handleSend(text)}
+      />
     </main>
   );
-}
-
-/** Values Virtuoso threads into its Header/Footer/EmptyPlaceholder slots. */
-interface ListContext {
-  loadingOlder: boolean;
-  hasMore: boolean;
-  hasRows: boolean;
-  smartView: boolean;
-}
-
-/** Top-of-list status: the older-page spinner, then the start-of-history mark. */
-function ListHeader({ context }: { context?: ListContext }) {
-  return (
-    <div className="pt-3">
-      {context?.loadingOlder && (
-        <p className="px-2 py-2 text-center text-xs text-muted">
-          Loading older notes…
-        </p>
-      )}
-      {context && !context.hasMore && context.hasRows && (
-        <p className="px-2 py-2 text-center text-xs text-muted">
-          Beginning of history
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Breathing room below the newest note so it clears the composer. */
-function ListFooter() {
-  return <div className="h-3" />;
-}
-
-function ListEmpty({ context }: { context?: ListContext }) {
-  return (
-    <p className="px-2 py-8 text-center text-sm text-muted">
-      {context?.smartView
-        ? "No notes here yet."
-        : "No notes in this space yet."}
-    </p>
-  );
-}
-
-const listComponents: Components<TimelineRow, ListContext> = {
-  Header: ListHeader,
-  Footer: ListFooter,
-  EmptyPlaceholder: ListEmpty,
-};
-
-function MessageRow({
-  doc,
-  smartView,
-  channels,
-  channelNames,
-  isEditing,
-  channelPickerOpen,
-  highlighted,
-  embeds,
-  attachments,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onCopy,
-  onDelete,
-  onToggleChannelPicker,
-  onToggleChannel,
-}: {
-  doc: RxDocument<MessageDoc>;
-  smartView: boolean;
-  channels: RxDocument<ChannelDoc>[];
-  channelNames: Map<string, string>;
-  isEditing: boolean;
-  channelPickerOpen: boolean;
-  highlighted?: boolean;
-  embeds?: EmbedDoc[];
-  attachments?: RxDocument<AttachmentDoc>[];
-  onStartEdit: (doc: RxDocument<MessageDoc>) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (doc: RxDocument<MessageDoc>, raw: string) => Promise<void>;
-  onCopy: (doc: RxDocument<MessageDoc>) => Promise<void>;
-  onDelete: (doc: RxDocument<MessageDoc>) => Promise<void>;
-  onToggleChannelPicker: (doc: RxDocument<MessageDoc>) => void;
-  onToggleChannel: (
-    doc: RxDocument<MessageDoc>,
-    channelId: string,
-  ) => Promise<void>;
-}) {
-  const channelIds = messageChannelIds(doc);
-  const channelLabel = channelIds
-    .map((channelId) => channelNames.get(channelId))
-    .filter((name): name is string => !!name)
-    .join(", ");
-
-  return (
-    <div
-      draggable={!isEditing}
-      onDragStart={(e) => {
-        e.dataTransfer.setData("application/x-aside-message-id", doc.id);
-        e.dataTransfer.effectAllowed = "copy";
-      }}
-      className={`group w-full relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${
-        highlighted ? "bg-active ring-2 ring-accent/60" : ""
-      }`}
-    >
-      <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
-        {formatTime(doc.createdAt)}
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        {smartView && (
-          <span className="w-fit rounded-md bg-hover px-2 py-0.5 text-[11px] font-medium text-muted">
-            <span className="opacity-60">#</span> {channelLabel || "unknown"}
-          </span>
-        )}
-        {isEditing ? (
-          <div className="min-w-0 flex-1">
-            <MarkdownEditor
-              key={doc.id}
-              initialValue={doc.text}
-              autoFocus
-              onSubmit={(text) => void onSaveEdit(doc, text)}
-              onCancel={onCancelEdit}
-              className="max-h-[50vh] w-full overflow-y-auto rounded-xl bg-panel px-3 py-2 text-ink outline-none ring-1 ring-accent"
-            />
-            <div className="mt-1 text-xs text-muted">
-              escape to{" "}
-              <button
-                type="button"
-                onClick={onCancelEdit}
-                className="text-accent hover:underline"
-              >
-                cancel
-              </button>{" "}
-              • enter to save • shift+enter for newline
-            </div>
-          </div>
-        ) : (
-          <>
-            {doc.text && (
-              <Markdown text={doc.text} className="break-words text-ink" />
-            )}
-            {embeds?.map((embed) => (
-              <LinkPreviewCard key={embed.id} embed={embed} />
-            ))}
-            <AttachmentCards items={attachments} />
-          </>
-        )}
-      </div>
-      {!isEditing && (
-        <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider group-hover:flex">
-          <button
-            type="button"
-            onClick={() => onToggleChannelPicker(doc)}
-            aria-label="Edit spaces"
-            className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconTags className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onStartEdit(doc)}
-            aria-label="Edit"
-            className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconPencil className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => void onCopy(doc)}
-            aria-label="Copy"
-            className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconCopy className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => void onDelete(doc)}
-            aria-label="Delete"
-            className="rounded-md p-1 text-muted hover:bg-hover hover:text-danger"
-          >
-            <IconTrash className="h-4 w-4" />
-          </button>
-        </span>
-      )}
-      {!isEditing && channelPickerOpen && (
-        <div className="absolute right-2 top-6 z-20 w-56 rounded-xl bg-panel p-2 text-sm shadow-xl ring-1 ring-divider">
-          {channels.map((channel) => {
-            const checked = channelIds.includes(channel.id);
-            const disabled = checked && channelIds.length === 1;
-            return (
-              <label
-                key={channel.id}
-                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
-                  disabled ? "text-muted" : "text-ink hover:bg-hover"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => void onToggleChannel(doc, channel.id)}
-                  className="h-4 w-4 accent-[var(--color-accent)]"
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="text-muted">#</span> {channel.name}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Header title, icon, and count for the current view. */
-function headerMeta(
-  view: string,
-  channelNames: Map<string, string>,
-  counts: NoteCounts,
-): { label: string; Icon: typeof IconList; count: number } {
-  switch (view) {
-    case ALL_ID:
-      return { label: "All Notes", Icon: IconList, count: counts.all };
-    case TODAY_ID:
-      return { label: "Today", Icon: IconSparkles, count: counts.today };
-    case LINKS_ID:
-      return { label: "Links", Icon: IconLink, count: counts.links };
-    case PHOTOS_ID:
-      return { label: "Photos", Icon: IconImage, count: counts.photos };
-    default:
-      return {
-        label: channelNames.get(view) ?? view,
-        Icon: IconHash,
-        count: counts.byChannel.get(view) ?? 0,
-      };
-  }
-}
-
-/**
- * Renders a message's attachments below its body (ATT-3): images as inline
- * preview cards (linking to the full blob), other files as a download chip.
- */
-export function AttachmentCards({
-  items,
-}: {
-  items?: RxDocument<AttachmentDoc>[];
-}) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="mt-1 flex flex-wrap gap-2">
-      {items.map((a) =>
-        a.mimeType.startsWith("image/") ? (
-          <a
-            key={a.id}
-            href={blobUrl(a.blobHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block"
-          >
-            <img
-              src={blobUrl(a.blobHash)}
-              alt={a.fileName}
-              loading="lazy"
-              className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
-            />
-          </a>
-        ) : (
-          <a
-            key={a.id}
-            href={blobUrl(a.blobHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-xl border border-divider bg-panel px-3 py-2 text-sm text-ink hover:bg-hover"
-          >
-            <IconPaperclip className="h-4 w-4 shrink-0 text-muted" />
-            <span className="max-w-[12rem] truncate">{a.fileName}</span>
-            <span className="shrink-0 text-xs text-muted">
-              {formatSize(a.size)}
-            </span>
-          </a>
-        ),
-      )}
-    </div>
-  );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-interface PageResult {
-  docs: RxDocument<MessageDoc>[];
-  nextCursor: number | null;
-  hasMore: boolean;
-}
-
-type TimelineRow =
-  | { type: "day"; key: string; label: string }
-  | { type: "message"; key: string; doc: RxDocument<MessageDoc> };
-
-function rowsByDay(docs: RxDocument<MessageDoc>[]): TimelineRow[] {
-  const rows: TimelineRow[] = [];
-  let lastKey: string | null = null;
-  for (const doc of docs) {
-    const date = new Date(doc.createdAt);
-    const key = date.toDateString();
-    if (lastKey !== key) {
-      rows.push({
-        type: "day",
-        key: `day:${key}`,
-        label: formatDayLabel(date),
-      });
-      lastKey = key;
-    }
-    rows.push({ type: "message", key: doc.id, doc });
-  }
-  return rows;
-}
-
-async function fetchPage(
-  messages: MessageCollection,
-  view: string,
-  imageMessageIds: Set<string>,
-  before: number | null,
-): Promise<PageResult> {
-  if (view !== ALL_ID && view !== TODAY_ID) {
-    return fetchFilteredPage(messages, view, imageMessageIds, before);
-  }
-  const docs = await queryRecent(
-    messages,
-    recentSelector(view, before),
-    PAGE_SIZE,
-  );
-  return pageFromBatch(docs);
-}
-
-async function fetchFilteredPage(
-  messages: MessageCollection,
-  view: string,
-  imageMessageIds: Set<string>,
-  before: number | null,
-): Promise<PageResult> {
-  let cursor = before;
-  let hasMore = true;
-  const matches: RxDocument<MessageDoc>[] = [];
-
-  while (matches.length < PAGE_SIZE && hasMore) {
-    const batch = await queryRecent(
-      messages,
-      recentSelector(ALL_ID, cursor),
-      SCAN_SIZE,
-    );
-    hasMore = batch.length === SCAN_SIZE;
-    cursor = oldestCreatedAt(batch);
-    matches.push(
-      ...batch.filter((doc) => matchesView(view, doc, imageMessageIds)),
-    );
-  }
-
-  return {
-    docs: sortAscending(matches).slice(-PAGE_SIZE),
-    nextCursor: cursor,
-    hasMore,
-  };
-}
-
-async function queryRecent(
-  messages: MessageCollection,
-  selector: MangoQuerySelector<MessageDoc>,
-  limit: number,
-): Promise<RxDocument<MessageDoc>[]> {
-  const docs = await messages
-    .find({
-      selector,
-      sort: [{ createdAt: "desc" }],
-      limit,
-    })
-    .exec();
-  return docs;
-}
-
-function recentSelector(
-  view: string,
-  before: number | null,
-): MangoQuerySelector<MessageDoc> {
-  const createdAt = before === null ? {} : { $lt: before };
-  if (view === TODAY_ID) {
-    const { start, end } = todayRange();
-    return {
-      createdAt: {
-        ...createdAt,
-        $gte: start,
-        $lt: Math.min(end, before ?? end),
-      },
-    };
-  }
-  if (view === ALL_ID) {
-    return before === null ? {} : { createdAt };
-  }
-  return before === null ? {} : { createdAt };
-}
-
-function liveSelector(
-  view: string,
-  after: number,
-): MangoQuerySelector<MessageDoc> {
-  if (view === TODAY_ID) {
-    const { start, end } = todayRange();
-    return { createdAt: { $gte: Math.max(start, after), $lt: end } };
-  }
-  if (view === ALL_ID || view === LINKS_ID || view === PHOTOS_ID) {
-    return { createdAt: { $gte: after } };
-  }
-  return { createdAt: { $gte: after } };
-}
-
-function pageFromBatch(docs: RxDocument<MessageDoc>[]): PageResult {
-  return {
-    docs: sortAscending(docs),
-    nextCursor: oldestCreatedAt(docs),
-    hasMore: docs.length === PAGE_SIZE,
-  };
-}
-
-function mergeDocs(
-  left: RxDocument<MessageDoc>[],
-  right: RxDocument<MessageDoc>[],
-): RxDocument<MessageDoc>[] {
-  const byId = new Map<string, RxDocument<MessageDoc>>();
-  for (const doc of left) byId.set(doc.id, doc);
-  for (const doc of right) byId.set(doc.id, doc);
-  return sortAscending([...byId.values()]);
-}
-
-function sortAscending(
-  docs: RxDocument<MessageDoc>[],
-): RxDocument<MessageDoc>[] {
-  return [...docs].sort((a, b) => a.createdAt - b.createdAt);
-}
-
-function oldestCreatedAt(docs: RxDocument<MessageDoc>[]): number | null {
-  if (docs.length === 0) return null;
-  return Math.min(...docs.map((doc) => doc.createdAt));
-}
-
-function todayRange(): { start: number; end: number } {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 1);
-  return { start: start.getTime(), end: end.getTime() };
-}
-
-function formatDayLabel(date: Date): string {
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return "Today";
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
