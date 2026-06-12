@@ -2,10 +2,22 @@ import type { Checkpoint } from "@aside/shared";
 import type { RxCollection, RxReplicationPullStreamItem } from "rxdb";
 import { replicateRxCollection } from "rxdb/plugins/replication";
 import { Subject } from "rxjs";
+import { authFetch, authUrl } from "../auth";
 
 // One replication per collection name; guard against React re-renders starting
 // duplicates (each would open a second SSE connection).
-const started = new Set<string>();
+const started = new Map<
+  string,
+  { events: EventSource; state: { cancel?: () => void | Promise<void> } }
+>();
+
+export function stopReplication(): void {
+  for (const { events, state } of started.values()) {
+    events.close();
+    void state.cancel?.();
+  }
+  started.clear();
+}
 
 /**
  * Wires a collection to the server's pull/push/stream endpoints under
@@ -23,12 +35,11 @@ export function startReplication<TDoc>(options: {
 }): void {
   const { collection, name } = options;
   if (started.has(name)) return;
-  started.add(name);
 
   type PullStreamItem = RxReplicationPullStreamItem<TDoc, Checkpoint>;
   const pullStream$ = new Subject<PullStreamItem>();
 
-  const events = new EventSource(`/api/sync/${name}/stream`);
+  const events = new EventSource(authUrl(`/api/sync/${name}/stream`));
   events.onmessage = (event) => {
     if (!event.data) return;
     pullStream$.next(JSON.parse(event.data) as PullStreamItem);
@@ -38,14 +49,14 @@ export function startReplication<TDoc>(options: {
     pullStream$.next("RESYNC");
   };
 
-  replicateRxCollection<TDoc, Checkpoint>({
+  const state = replicateRxCollection<TDoc, Checkpoint>({
     collection,
     replicationIdentifier: `aside-${name}-http`,
     live: true,
     retryTime: 5000,
     pull: {
       async handler(checkpoint, batchSize) {
-        const res = await fetch(`/api/sync/${name}/pull`, {
+        const res = await authFetch(`/api/sync/${name}/pull`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ checkpoint: checkpoint ?? null, batchSize }),
@@ -57,7 +68,7 @@ export function startReplication<TDoc>(options: {
     },
     push: {
       async handler(rows) {
-        const res = await fetch(`/api/sync/${name}/push`, {
+        const res = await authFetch(`/api/sync/${name}/push`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(rows),
@@ -66,5 +77,9 @@ export function startReplication<TDoc>(options: {
         return res.json();
       },
     },
+  });
+  started.set(name, {
+    events,
+    state: state as unknown as { cancel?: () => void | Promise<void> },
   });
 }

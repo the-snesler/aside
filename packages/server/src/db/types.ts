@@ -150,6 +150,27 @@ export interface FeedSourcesTable {
   updated_at: number;
 }
 
+/** Single-user password record. Exactly one row is expected, keyed by "owner". */
+export interface AuthOwnerTable {
+  id: string;
+  password_hash: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Server-side sessions. The browser only sees the random token; SQLite stores
+ * the sha256 hash so a database dump does not contain live bearer tokens.
+ */
+export interface AuthSessionsTable {
+  id: string;
+  token_hash: string;
+  created_at: number;
+  last_seen_at: number;
+  user_agent: string | null;
+  revoked_at: number | null;
+}
+
 export interface Database {
   messages: MessagesTable;
   channels: ChannelsTable;
@@ -159,4 +180,6 @@ export interface Database {
   attachments: AttachmentsTable;
   blobs: BlobsTable;
   feed_sources: FeedSourcesTable;
+  auth_owner: AuthOwnerTable;
+  auth_sessions: AuthSessionsTable;
 }

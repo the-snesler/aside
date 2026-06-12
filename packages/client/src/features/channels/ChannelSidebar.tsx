@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { RxDocument } from "rxdb";
 import IconLink from "~icons/lucide/link";
 import IconList from "~icons/lucide/list";
+import IconLogOut from "~icons/lucide/log-out";
 import IconPlus from "~icons/lucide/plus";
 import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
@@ -20,6 +21,7 @@ interface Props {
   onSelect: (view: string) => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
+  onLogout: () => void;
 }
 
 export function ChannelSidebar({
@@ -29,6 +31,7 @@ export function ChannelSidebar({
   onSelect,
   onOpenSettings,
   onOpenSearch,
+  onLogout,
 }: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,15 +101,26 @@ export function ChannelSidebar({
           <img src="/aside-logo.svg" alt="" className="h-7 w-7" />
           <span className="text-lg font-semibold text-ink">Aside</span>
         </div>
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          aria-label="Feeds settings"
-          title="Feeds"
-          className="rounded-lg p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink"
-        >
-          <IconSettings className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="Feeds settings"
+            title="Feeds"
+            className="rounded-lg p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink"
+          >
+            <IconSettings className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Log out"
+            title="Log out"
+            className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+          >
+            <IconLogOut className="h-4 w-4" />
+          </button>
+        </div>
       </header>
 
       <div className="px-3 pb-2">
@@ -132,11 +146,10 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-active text-ink shadow-sm"
-                      : "text-ink/80 hover:bg-hover"
-                  }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
+                    ? "bg-active text-ink shadow-sm"
+                    : "text-ink/80 hover:bg-hover"
+                    }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -177,9 +190,8 @@ export function ChannelSidebar({
                   />
                 ) : (
                   <div
-                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${
-                      active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
-                    }`}
+                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
+                      }`}
                   >
                     <button
                       type="button"

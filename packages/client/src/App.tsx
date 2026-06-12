@@ -1,7 +1,16 @@
 import { DEFAULT_CHANNEL_ID } from "@aside/shared";
 import { useCallback, useEffect, useState } from "react";
+import {
+  clearAuthToken,
+  getAuthStatus,
+  getAuthToken,
+  loginPassword,
+  logout,
+  onAuthLost,
+  setupPassword,
+} from "./auth";
 import { getDatabase, type AsideDatabase } from "./db/database";
-import { startReplication } from "./db/replication";
+import { startReplication, stopReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
 import { FeedSettings } from "./features/feeds/FeedSettings";
 import { MessageList } from "./features/messages/MessageList";
@@ -10,7 +19,96 @@ import { useSearchIndex } from "./features/search/searchIndex";
 import { ALL_ID, useNoteCounts } from "./features/views";
 import { useTheme } from "./theme";
 
+type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
+
 export function App() {
+  const [authMode, setAuthMode] = useState<AuthMode>(() =>
+    getAuthToken() ? "app" : "checking",
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkAuth() {
+      const token = getAuthToken();
+      if (token) {
+        setAuthMode("app");
+        try {
+          const status = await getAuthStatus();
+          if (!active) return;
+          if (!status.authenticated) {
+            clearAuthToken();
+            stopReplication();
+            setAuthMode(status.setupRequired ? "setup" : "login");
+          }
+        } catch {
+          // Local-first: keep showing cached data while the server is offline.
+        }
+        return;
+      }
+
+      try {
+        const status = await getAuthStatus();
+        if (!active) return;
+        setAuthMode(status.setupRequired ? "setup" : "login");
+      } catch {
+        if (active) setAuthMode("unreachable");
+      }
+    }
+
+    void checkAuth();
+    const unsubscribe = onAuthLost(() => {
+      stopReplication();
+      setAuthMode("login");
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  function retryAuth() {
+    const token = getAuthToken();
+    if (token) {
+      setAuthMode("app");
+      return;
+    }
+
+    setAuthMode("checking");
+    void getAuthStatus()
+      .then((status) => {
+        setAuthMode(status.setupRequired ? "setup" : "login");
+      })
+      .catch(() => setAuthMode("unreachable"));
+  }
+
+  if (authMode !== "app") {
+    return (
+      <AuthScreen
+        mode={authMode}
+        onRetry={retryAuth}
+        onAuthenticated={() => {
+          stopReplication();
+          setAuthMode("app");
+        }}
+      />
+    );
+  }
+
+  return (
+    <AuthedApp
+      onLogout={() => {
+        void logout().finally(() => {
+          stopReplication();
+          setAuthMode("login");
+        });
+      }}
+    />
+  );
+}
+
+function AuthedApp({ onLogout }: { onLogout: () => void }) {
   const [db, setDb] = useState<AsideDatabase | null>(null);
   // Open on "All Notes" — the unified view across every space.
   const [view, setView] = useState<string>(ALL_ID);
@@ -35,6 +133,7 @@ export function App() {
     });
     return () => {
       active = false;
+      stopReplication();
     };
   }, []);
 
@@ -49,17 +148,19 @@ export function App() {
     );
   }
 
-  return <Workspace db={db} view={view} onSelect={setView} />;
+  return <Workspace db={db} view={view} onSelect={setView} onLogout={onLogout} />;
 }
 
 function Workspace({
   db,
   view,
   onSelect,
+  onLogout,
 }: {
   db: AsideDatabase;
   view: string;
   onSelect: (view: string) => void;
+  onLogout: () => void;
 }) {
   const counts = useNoteCounts(db.messages, db.attachments);
   const { channels, search } = useSearchIndex(db);
@@ -101,6 +202,7 @@ function Workspace({
         onSelect={onSelect}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenSearch={() => setPaletteOpen(true)}
+        onLogout={onLogout}
       />
       <MessageList
         messages={db.messages}
@@ -128,6 +230,97 @@ function Workspace({
         onSelectView={onSelect}
         onNavigateToNote={handleNavigateToNote}
       />
+    </div>
+  );
+}
+
+function AuthScreen({
+  mode,
+  onRetry,
+  onAuthenticated,
+}: {
+  mode: AuthMode;
+  onRetry: () => void;
+  onAuthenticated: () => void;
+}) {
+  const isSetup = mode === "setup";
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!password || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (isSetup) await setupPassword(password);
+      else await loginPassword(password);
+      setPassword("");
+      onAuthenticated();
+    } catch {
+      setError(isSetup ? "Could not create password." : "Incorrect password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (mode === "checking") {
+    return (
+      <div className="flex h-full items-center justify-center bg-chat text-muted">
+        Loading…
+      </div>
+    );
+  }
+
+  if (mode === "unreachable") {
+    return (
+      <div className="flex h-full items-center justify-center bg-chat px-4">
+        <div className="w-full max-w-sm rounded border border-divider bg-panel p-5 shadow">
+          <h1 className="text-lg font-semibold text-ink">Server unavailable</h1>
+          <p className="mt-2 text-sm text-muted">
+            Start the server, then try again.
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-4 w-full rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center bg-chat px-4">
+      <form
+        onSubmit={(e) => void submit(e)}
+        className="w-full max-w-sm rounded border border-divider bg-panel p-5 shadow"
+      >
+        <h1 className="text-lg font-semibold text-ink">
+          {isSetup ? "Create password" : "Log in"}
+        </h1>
+        <label className="mt-4 block text-sm font-medium text-muted">
+          Password
+          <input
+            autoFocus
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="mt-1 w-full rounded bg-rail px-3 py-2 text-ink outline-none ring-1 ring-divider focus:ring-accent"
+          />
+        </label>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+        <button
+          type="submit"
+          disabled={!password || busy}
+          className="mt-4 w-full rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? "Working…" : isSetup ? "Create" : "Log in"}
+        </button>
+      </form>
     </div>
   );
 }

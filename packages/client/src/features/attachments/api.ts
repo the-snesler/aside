@@ -4,13 +4,15 @@
  * synced attachment document. The matching download is just an `<img src>` /
  * link pointing at `/api/blobs/:hash`.
  */
+import { authFetch, authUrl } from "../../auth";
+
 export interface UploadedBlob {
   hash: string;
   size: number;
 }
 
 export async function uploadBlob(file: File): Promise<UploadedBlob> {
-  const res = await fetch("/api/blobs", {
+  const res = await authFetch("/api/blobs", {
     method: "POST",
     headers: { "content-type": file.type || "application/octet-stream" },
     body: file,
@@ -26,5 +28,5 @@ export async function uploadBlob(file: File): Promise<UploadedBlob> {
 
 /** Content-addressed download URL for a stored blob. */
 export function blobUrl(hash: string): string {
-  return `/api/blobs/${hash}`;
+  return authUrl(`/api/blobs/${hash}`);
 }
