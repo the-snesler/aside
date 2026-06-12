@@ -50,6 +50,8 @@ interface Props {
   onSelectView: (view: string) => void;
   counts: NoteCounts;
   onOpenSettings: () => void;
+  onOpenSearch: () => void;
+  focusedMessageId: string | null;
 }
 
 /** A file being uploaded for the next send (ATT-3). */
@@ -74,6 +76,8 @@ export function MessageList({
   onSelectView,
   counts,
   onOpenSettings,
+  onOpenSearch,
+  focusedMessageId,
 }: Props) {
   const smartView = isSmartView(view);
   const [docs, setDocs] = useState<RxDocument<MessageDoc>[]>([]);
@@ -103,6 +107,8 @@ export function MessageList({
 
   const composerRef = useRef<MarkdownEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   useEffect(() => {
     // Load all, sorted oldest→newest (chat order: newest sits by the composer).
@@ -174,6 +180,16 @@ export function MessageList({
   const groups = useMemo(() => groupByDay(visibleDocs), [visibleDocs]);
 
   const meta = headerMeta(view, channelNames, counts);
+
+  useEffect(() => {
+    if (!focusedMessageId) return;
+    const row = rowRefs.current.get(focusedMessageId);
+    if (!row) return;
+    row.scrollIntoView({ block: "center" });
+    setHighlightedId(focusedMessageId);
+    const handle = window.setTimeout(() => setHighlightedId(null), 1500);
+    return () => window.clearTimeout(handle);
+  }, [focusedMessageId, groups]);
 
   function addFiles(files: File[]) {
     // ATT-3: stage each file with an instant local thumbnail, then upload its
@@ -333,6 +349,7 @@ export function MessageList({
           </h1>
           <button
             type="button"
+            onClick={onOpenSearch}
             aria-label="Search"
             className="rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
           >
@@ -414,7 +431,15 @@ export function MessageList({
                 return (
                   <li
                     key={doc.id}
-                    className="group relative flex gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-hover md:px-3"
+                    ref={(node) => {
+                      if (node) rowRefs.current.set(doc.id, node);
+                      else rowRefs.current.delete(doc.id);
+                    }}
+                    className={`group relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${
+                      highlightedId === doc.id
+                        ? "bg-active ring-2 ring-accent/60"
+                        : ""
+                    }`}
                   >
                     <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
                       {formatTime(doc.createdAt)}

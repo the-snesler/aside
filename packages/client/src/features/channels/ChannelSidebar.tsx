@@ -19,6 +19,7 @@ interface Props {
   selectedView: string;
   onSelect: (view: string) => void;
   onOpenSettings: () => void;
+  onOpenSearch: () => void;
 }
 
 export function ChannelSidebar({
@@ -27,6 +28,7 @@ export function ChannelSidebar({
   selectedView,
   onSelect,
   onOpenSettings,
+  onOpenSearch,
 }: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -90,9 +92,7 @@ export function ChannelSidebar({
   ];
 
   return (
-    <aside
-      className="hidden h-full min-h-0 w-[268px] shrink-0 flex-col overflow-hidden md:flex md:pr-5"
-    >
+    <aside className="hidden h-full min-h-0 w-[268px] shrink-0 flex-col overflow-hidden md:flex md:pr-5">
       <header className="flex h-14 shrink-0 items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <img src="/aside-logo.svg" alt="" className="h-7 w-7" />
@@ -110,13 +110,17 @@ export function ChannelSidebar({
       </header>
 
       <div className="px-3 pb-2">
-        <div className="flex items-center gap-2 rounded-xl bg-panel/60 px-3 py-2 text-sm text-muted shadow-sm ring-1 ring-divider">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="flex w-full items-center gap-2 rounded-xl bg-panel/60 px-3 py-2 text-left text-sm text-muted shadow-sm ring-1 ring-divider transition-colors hover:bg-panel hover:text-ink"
+        >
           <IconSearch className="h-4 w-4" />
           <span className="flex-1 truncate">Jot or search…</span>
           <kbd className="rounded bg-hover px-1.5 py-0.5 font-mono text-[11px] text-muted">
             ⌘K
           </kbd>
-        </div>
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-2">
@@ -128,10 +132,11 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? "bg-active text-ink shadow-sm"
-                    : "text-ink/80 hover:bg-hover"
-                    }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-active text-ink shadow-sm"
+                      : "text-ink/80 hover:bg-hover"
+                  }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -172,8 +177,9 @@ export function ChannelSidebar({
                   />
                 ) : (
                   <div
-                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
-                      }`}
+                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${
+                      active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
+                    }`}
                   >
                     <button
                       type="button"
