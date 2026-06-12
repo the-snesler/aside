@@ -76,8 +76,19 @@ describe("message contract", () => {
 const channelSample: ReplicatedChannelDoc = {
   id: "channel-1",
   name: "general",
+  description: "Catch-all space for notes that don't fit elsewhere.",
   createdAt: 1,
   updatedAt: 2,
+  _deleted: false,
+};
+
+// A channel with no description: the optional field stays *absent* (not null),
+// matching the embed contract's sparse-field handling.
+const sparseChannelSample: ReplicatedChannelDoc = {
+  id: "channel-2",
+  name: "links",
+  createdAt: 3,
+  updatedAt: 4,
   _deleted: false,
 };
 
@@ -100,11 +111,16 @@ describe("channel contract", () => {
     expect(zodFields).toContain("_deleted");
     expect(rxFields).not.toContain("_deleted");
     expect(channelDocSchema.parse(channelSample)).toEqual(channelSample);
+    // Optional `description` stays absent (not coerced to a null/undefined key).
+    expect(channelDocSchema.parse(sparseChannelSample)).toEqual(
+      sparseChannelSample,
+    );
   });
 
-  it("has a v1 identity migration from the original schema", () => {
-    expect(channelSchema.version).toBe(1);
+  it("migrates through the v2 description addition", () => {
+    expect(channelSchema.version).toBe(2);
     expect(channelMigrationStrategies[1](channelSample)).toBe(channelSample);
+    expect(channelMigrationStrategies[2](channelSample)).toBe(channelSample);
   });
 });
 

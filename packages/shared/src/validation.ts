@@ -25,6 +25,9 @@ export const messageDocSchema: z.ZodType<ReplicatedMessageDoc> = z.object({
 export const channelDocSchema: z.ZodType<ReplicatedChannelDoc> = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(64),
+  // Optional + absent (never null), matching the RxDB schema where `description`
+  // sits outside `required`.
+  description: z.string().max(2000).optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
   _deleted: z.boolean(),

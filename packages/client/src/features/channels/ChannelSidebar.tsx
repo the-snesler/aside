@@ -154,10 +154,11 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? "bg-active text-ink shadow-sm"
-                    : "text-ink/80 hover:bg-hover"
-                    }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-active text-ink shadow-sm"
+                      : "text-ink/80 hover:bg-hover"
+                  }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -205,9 +206,15 @@ export function ChannelSidebar({
                         setEditingId(doc.id);
                         setEditDraft(doc.name);
                       }}
-                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
-                        }`}
-                      title="Click to open · double-click to rename"
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${
+                        active
+                          ? "bg-active text-ink shadow-sm"
+                          : "hover:bg-hover"
+                      }`}
+                      title={
+                        doc.description ||
+                        "Click to open · double-click to rename"
+                      }
                     >
                       <span
                         className="h-3.5 w-3.5 shrink-0 rounded-[5px]"

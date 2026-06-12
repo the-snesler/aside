@@ -24,6 +24,8 @@ interface Props {
   view: string;
   smartView: boolean;
   channelNames: Map<string, string>;
+  /** AI-generated summary of the current channel, shown under the title. */
+  description?: string | null;
   counts: NoteCounts;
   onOpenMenu: () => void;
   onOpenSettings: () => void;
@@ -34,6 +36,7 @@ export function MessageListHeader({
   view,
   smartView,
   channelNames,
+  description,
   counts,
   onOpenMenu,
   onOpenSettings,
@@ -43,13 +46,23 @@ export function MessageListHeader({
 
   return (
     <>
-      {/* Desktop header: current view + count. */}
-      <header className="hidden h-14 shrink-0 items-center gap-2.5 px-6 md:flex">
-        <meta.Icon className="h-5 w-5 text-accent" />
-        <h1 className="text-lg font-semibold text-ink">
-          {smartView ? meta.label : `#${meta.label}`}
-        </h1>
-        <span className="text-sm tabular-nums text-muted">{meta.count}</span>
+      {/* Desktop header: current view + count, with the channel description below. */}
+      <header className="hidden min-h-14 shrink-0 flex-col justify-center gap-0.5 px-6 py-2 md:flex">
+        <div className="flex items-center gap-2.5">
+          <meta.Icon className="h-5 w-5 text-accent" />
+          <h1 className="text-lg font-semibold text-ink">
+            {smartView ? meta.label : `#${meta.label}`}
+          </h1>
+          <span className="text-sm tabular-nums text-muted">{meta.count}</span>
+        </div>
+        {description && (
+          <p
+            className="truncate pl-[30px] text-xs text-muted"
+            title={description}
+          >
+            {description}
+          </p>
+        )}
       </header>
 
       {/* Mobile header: title row. Navigation lives in the swipe-revealed sidebar. */}

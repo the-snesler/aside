@@ -19,6 +19,8 @@ export interface MessagesTable {
 export interface ChannelsTable {
   id: string;
   name: string;
+  /** short channel summary, maintained by the AI describer; null when unset */
+  description: string | null;
   created_at: number;
   updated_at: number;
   /** server-owned replication cursor */
@@ -151,6 +153,71 @@ export interface FeedSourcesTable {
   updated_at: number;
 }
 
+/**
+ * Server-only ambient-AI configuration. NOT synced (no `seq`/`deleted`) — it
+ * holds the LLM provider/model and the API key, which must never enter the sync
+ * stream. Exactly one row is expected, keyed by {@link AI_CONFIG_ID}.
+ */
+export interface AiConfigTable {
+  id: string;
+  /** 0 | 1 — master switch for the organizer bot (auto-tagging) */
+  organizer_enabled: number;
+  /** 0 | 1 — switch for the describer bot (channel descriptions) */
+  describer_enabled: number;
+  /** "anthropic" | "openai" | "openai-compatible" */
+  provider: string;
+  /** model id, e.g. "claude-haiku-4-5" */
+  model: string;
+  /** base URL for openai-compatible / self-hosted endpoints; null otherwise */
+  base_url: string | null;
+  /** LLM API key; null falls back to the provider's env var */
+  api_key: string | null;
+  /** cron driving the describer sweep */
+  describe_cron: string;
+  /** reserved for source-specific options, JSON */
+  options: string;
+  /** "ok" | "error" | null */
+  last_status: string | null;
+  last_error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Server-only per-message organizer state. NOT synced. Breaks the organizer's
+ * write→onChange feedback loop: keyed by `message_id`, it records the hash of the
+ * text we last classified, so the worker re-runs only when the *text* changes —
+ * not when its own channel-id write fans back through `onChange("messages")`.
+ */
+export interface AiMessageStateTable {
+  message_id: string;
+  /** hash of the message text the last classification was derived from */
+  text_hash: string;
+  /** JSON array of channel ids the organizer added (to detect user overrides) */
+  assigned_channel_ids: string;
+  /** "ok" | "skipped" | "error" */
+  status: string;
+  last_error: string | null;
+  updated_at: number;
+}
+
+/**
+ * Server-only per-channel describer state. NOT synced. Cooldown + dedup guard:
+ * `described_at` gates how often a channel is re-described, and `source_hash`
+ * skips rewriting an identical description (which would burn a seq).
+ */
+export interface AiChannelStateTable {
+  channel_id: string;
+  /** ms epoch of the last successful describe, or null */
+  described_at: number | null;
+  /** hash of the channel content the description was derived from, or null */
+  source_hash: string | null;
+  /** "ok" | "error" | null */
+  status: string | null;
+  last_error: string | null;
+  updated_at: number;
+}
+
 /** Single-user password record. Exactly one row is expected, keyed by "owner". */
 export interface AuthOwnerTable {
   id: string;
@@ -181,6 +248,9 @@ export interface Database {
   attachments: AttachmentsTable;
   blobs: BlobsTable;
   feed_sources: FeedSourcesTable;
+  ai_config: AiConfigTable;
+  ai_message_state: AiMessageStateTable;
+  ai_channel_state: AiChannelStateTable;
   auth_owner: AuthOwnerTable;
   auth_sessions: AuthSessionsTable;
 }

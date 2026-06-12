@@ -44,6 +44,8 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
     .execute();
 
+  await ensureChannelDescriptionColumn(db);
+
   await db.schema
     .createIndex("channels_seq")
     .ifNotExists()
@@ -184,6 +186,53 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("updated_at", "integer", (c) => c.notNull())
     .execute();
 
+  // Server-only ambient-AI config (provider, model, API key). Not part of the
+  // sync protocol (no seq / deleted) — the API key must never reach a client.
+  // One row, keyed by a stable id.
+  await db.schema
+    .createTable("ai_config")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("organizer_enabled", "integer", (c) => c.notNull().defaultTo(0))
+    .addColumn("describer_enabled", "integer", (c) => c.notNull().defaultTo(0))
+    .addColumn("provider", "text", (c) => c.notNull())
+    .addColumn("model", "text", (c) => c.notNull())
+    .addColumn("base_url", "text")
+    .addColumn("api_key", "text")
+    .addColumn("describe_cron", "text", (c) => c.notNull())
+    .addColumn("options", "text", (c) => c.notNull().defaultTo("{}"))
+    .addColumn("last_status", "text")
+    .addColumn("last_error", "text")
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
+
+  // Server-only organizer dedup/loop-guard, keyed by message id. Not synced.
+  await db.schema
+    .createTable("ai_message_state")
+    .ifNotExists()
+    .addColumn("message_id", "text", (c) => c.primaryKey())
+    .addColumn("text_hash", "text", (c) => c.notNull())
+    .addColumn("assigned_channel_ids", "text", (c) =>
+      c.notNull().defaultTo("[]"),
+    )
+    .addColumn("status", "text", (c) => c.notNull())
+    .addColumn("last_error", "text")
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
+
+  // Server-only describer cooldown/dedup, keyed by channel id. Not synced.
+  await db.schema
+    .createTable("ai_channel_state")
+    .ifNotExists()
+    .addColumn("channel_id", "text", (c) => c.primaryKey())
+    .addColumn("described_at", "integer")
+    .addColumn("source_hash", "text")
+    .addColumn("status", "text")
+    .addColumn("last_error", "text")
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
+
   // Single-user auth. The owner table intentionally has one stable primary key
   // so first-run setup can be enforced by a normal uniqueness constraint.
   await db.schema
@@ -223,6 +272,23 @@ async function ensureSeqColumn(db: Kysely<Database>): Promise<void> {
     await db.schema
       .alterTable("messages")
       .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
+      .execute();
+  }
+}
+
+async function ensureChannelDescriptionColumn(
+  db: Kysely<Database>,
+): Promise<void> {
+  const tables = await db.introspection.getTables();
+  const channels = tables.find((table) => table.name === "channels");
+  const hasDescription = channels?.columns.some(
+    (column) => column.name === "description",
+  );
+
+  if (!hasDescription) {
+    await db.schema
+      .alterTable("channels")
+      .addColumn("description", "text")
       .execute();
   }
 }

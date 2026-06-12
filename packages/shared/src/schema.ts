@@ -57,12 +57,15 @@ export const messageMigrationStrategies = {
  */
 export const channelSchema: RxJsonSchema<ChannelDoc> = {
   title: "channel schema",
-  version: 1,
+  version: 2,
   primaryKey: "id",
   type: "object",
   properties: {
     id: { type: "string", maxLength: 64 },
     name: { type: "string", maxLength: 64 },
+    // Outside `required` (optional, like the embed OpenGraph fields): a channel
+    // with no description omits the field rather than sending an empty/null value.
+    description: { type: "string", maxLength: 2000 },
     createdAt: { type: "number" },
     updatedAt: { type: "number" },
   },
@@ -71,6 +74,8 @@ export const channelSchema: RxJsonSchema<ChannelDoc> = {
 
 export const channelMigrationStrategies = {
   1: (doc: ChannelDoc) => doc,
+  // v2 adds the optional `description`; old channels just carry it absent.
+  2: (doc: ChannelDoc) => doc,
 };
 
 /**

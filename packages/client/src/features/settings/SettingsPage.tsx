@@ -3,6 +3,7 @@ import { useState } from "react";
 import { changePassword } from "../../auth";
 import type { ChannelCollection, ConfigCollection } from "../../db/database";
 import { DEFAULT_THEME } from "../../theme";
+import { AiSettings } from "../ai/AiSettings";
 import { FeedSettings } from "../feeds/FeedSettings";
 import IconBell from "~icons/lucide/bell";
 import IconDatabase from "~icons/lucide/database";
@@ -11,8 +12,10 @@ import IconMenu from "~icons/lucide/menu";
 import IconPalette from "~icons/lucide/palette";
 import IconRss from "~icons/lucide/rss";
 import IconSettings from "~icons/lucide/settings";
+import IconSparkles from "~icons/lucide/sparkles";
 
 type SectionId =
+  | "ai"
   | "feeds"
   | "appearance"
   | "storage"
@@ -31,6 +34,13 @@ const sections: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
+  {
+    id: "ai",
+    title: "Ambient AI",
+    description:
+      "Background bots that auto-organize notes and describe channels.",
+    icon: <IconSparkles className="h-5 w-5" />,
+  },
   {
     id: "feeds",
     title: "Feeds",
@@ -64,7 +74,7 @@ const sections: Array<{
 ];
 
 export function SettingsPage({ channels, config, onOpenMenu }: Props) {
-  const [activeSection, setActiveSection] = useState<SectionId>("feeds");
+  const [activeSection, setActiveSection] = useState<SectionId>("ai");
   const current = sections.find((section) => section.id === activeSection)!;
 
   return (
@@ -124,6 +134,7 @@ export function SettingsPage({ channels, config, onOpenMenu }: Props) {
               <p className="mt-1 text-sm text-muted">{current.description}</p>
             </div>
 
+            {activeSection === "ai" && <AiSettings />}
             {activeSection === "feeds" && <FeedSettings channels={channels} />}
             {activeSection === "appearance" && (
               <AppearanceSettings config={config} />

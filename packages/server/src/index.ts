@@ -24,6 +24,18 @@ import {
   stopFeed,
 } from "./feeds/scheduler.js";
 import { startEmbeds } from "./embeds/index.js";
+import {
+  getAiConfigPublic,
+  updateAiConfig,
+  type AiProvider,
+  type UpdateAiConfigInput,
+} from "./ai/config.js";
+import {
+  backfillOrganize,
+  redescribeAll,
+  reinitAmbientAi,
+  startAmbientAi,
+} from "./ai/index.js";
 import { attachmentsSync } from "./sync/attachments.js";
 import { channelsSync } from "./sync/channels.js";
 import type { ReplicatedDoc, SyncCollection } from "./sync/collection.js";
@@ -43,6 +55,11 @@ await initDb();
 // Begin OpenGraph extraction: subscribe to message writes + backfill existing
 // notes. Must run after initDb so the embeds seq counter is primed.
 startEmbeds();
+
+// Begin ambient AI: the organizer (auto-tags notes into channels) and describer
+// (keeps channel descriptions current). No-op until enabled in settings; must
+// run after initDb so the seq counters are primed.
+startAmbientAi();
 
 const app = new Hono();
 
@@ -228,6 +245,62 @@ app.post("/api/feeds/:id/cookies", async (c) => {
       400,
     );
   }
+  return c.json({ ok: true });
+});
+
+/**
+ * Ambient AI API. Server-only config (provider, model, base URL, API key) kept
+ * off the RxDB sync path — the key must never reach a client, so GET masks it as
+ * a `hasApiKey` flag. The notes/channels the bots edit still reach clients
+ * through the normal sync streams.
+ */
+const AI_PROVIDERS = new Set<AiProvider>([
+  "anthropic",
+  "openai",
+  "openai-compatible",
+]);
+
+function sanitizeAiPatch(body: UpdateAiConfigInput): UpdateAiConfigInput {
+  const patch: UpdateAiConfigInput = {};
+  if (typeof body.organizerEnabled === "boolean")
+    patch.organizerEnabled = body.organizerEnabled;
+  if (typeof body.describerEnabled === "boolean")
+    patch.describerEnabled = body.describerEnabled;
+  if (
+    typeof body.provider === "string" &&
+    AI_PROVIDERS.has(body.provider as AiProvider)
+  )
+    patch.provider = body.provider as AiProvider;
+  if (typeof body.model === "string") patch.model = body.model;
+  if (typeof body.baseUrl === "string" || body.baseUrl === null)
+    patch.baseUrl = body.baseUrl;
+  if (typeof body.apiKey === "string" || body.apiKey === null)
+    patch.apiKey = body.apiKey;
+  if (typeof body.describeCron === "string")
+    patch.describeCron = body.describeCron;
+  if (body.options && typeof body.options === "object")
+    patch.options = body.options as Record<string, unknown>;
+  return patch;
+}
+
+app.get("/api/ai/config", async (c) => c.json(await getAiConfigPublic()));
+
+app.patch("/api/ai/config", async (c) => {
+  const body = await c.req.json<UpdateAiConfigInput>().catch(() => ({}));
+  await updateAiConfig(sanitizeAiPatch(body));
+  // Re-apply: restart the describer cron and backfill if a bot was just enabled.
+  await reinitAmbientAi();
+  return c.json(await getAiConfigPublic());
+});
+
+// Manual triggers, independent of the live stream / cron.
+app.post("/api/ai/reorganize", async (c) => {
+  await backfillOrganize();
+  return c.json({ ok: true });
+});
+
+app.post("/api/ai/redescribe", async (c) => {
+  void redescribeAll();
   return c.json({ ok: true });
 });
 

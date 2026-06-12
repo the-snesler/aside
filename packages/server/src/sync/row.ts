@@ -62,18 +62,24 @@ function normalizeChannelIds(input: unknown[], fallback = "general"): string[] {
   return unique.length > 0 ? unique : [fallback];
 }
 
-/** SQLite row → replication wire document, for channels. */
+/**
+ * SQLite row → replication wire document, for channels. A null `description` is
+ * *omitted* rather than emitted as `null`: the RxDB schema types it as `string`
+ * (outside `required`), so the client's dev-mode validator rejects explicit null.
+ */
 export function channelRowToDoc(row: ChannelsTable): ReplicatedChannelDoc {
-  return {
+  const doc: ReplicatedChannelDoc = {
     id: row.id,
     name: row.name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     _deleted: row.deleted === 1,
   };
+  if (row.description !== null) doc.description = row.description;
+  return doc;
 }
 
-/** Replication wire document → SQLite row, for channels. */
+/** Replication wire document → SQLite row, for channels. Absent description → null. */
 export function channelDocToRow(
   doc: ReplicatedChannelDoc,
   seq: number,
@@ -81,6 +87,7 @@ export function channelDocToRow(
   return {
     id: doc.id,
     name: doc.name,
+    description: doc.description ?? null,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
     seq,

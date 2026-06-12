@@ -34,6 +34,13 @@ export interface ChannelDoc {
   id: string;
   /** display + `#tag` handle, e.g. "general" */
   name: string;
+  /**
+   * Short summary of what the channel is for. Optional (absent on channels
+   * created before this field, and on those the describer hasn't reached yet).
+   * Maintained by the server-side "describer" bot and read by the "organizer"
+   * bot to route messages; also surfaced in the UI.
+   */
+  description?: string;
   /** ms epoch */
   createdAt: number;
   /** ms epoch — last-write-time; used by conflict resolution and UI sorting */

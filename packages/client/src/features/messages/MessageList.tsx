@@ -381,9 +381,9 @@ export function MessageList({
       setDocs((prev) => {
         return matchesView(view, updated, imageMessageIds)
           ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+              prev.filter((item) => item.id !== updated.id),
+              [updated],
+            )
           : prev.filter((item) => item.id !== updated.id);
       });
       return;
@@ -420,9 +420,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
@@ -447,9 +447,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -460,6 +460,11 @@ export function MessageList({
         view={view}
         smartView={smartView}
         channelNames={channelNames}
+        description={
+          smartView
+            ? null
+            : (channelDocs.find((c) => c.id === view)?.description ?? null)
+        }
         counts={counts}
         onOpenMenu={onOpenMenu}
         onOpenSettings={onOpenSettings}
