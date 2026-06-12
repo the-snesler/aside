@@ -2,6 +2,7 @@ import { z } from "zod";
 import type {
   ReplicatedAttachmentDoc,
   ReplicatedChannelDoc,
+  ReplicatedConfigDoc,
   ReplicatedEmbedDoc,
   ReplicatedMessageDoc,
 } from "./types.js";
@@ -62,3 +63,12 @@ export const attachmentDocSchema: z.ZodType<ReplicatedAttachmentDoc> = z.object(
     _deleted: z.boolean(),
   },
 );
+
+/** Zod mirror of {@link ReplicatedConfigDoc}; the config push-boundary guard. */
+export const configDocSchema: z.ZodType<ReplicatedConfigDoc> = z.object({
+  id: z.string().min(1).max(64),
+  value: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  _deleted: z.boolean(),
+});

@@ -1,12 +1,14 @@
 import type {
   ReplicatedAttachmentDoc,
   ReplicatedChannelDoc,
+  ReplicatedConfigDoc,
   ReplicatedEmbedDoc,
   ReplicatedMessageDoc,
 } from "@aside/shared";
 import type {
   AttachmentsTable,
   ChannelsTable,
+  ConfigTable,
   EmbedsTable,
   MessagesTable,
 } from "../db/types.js";
@@ -138,6 +140,32 @@ export function attachmentDocToRow(
     file_name: doc.fileName,
     mime_type: doc.mimeType,
     size: doc.size,
+    created_at: doc.createdAt,
+    updated_at: doc.updatedAt,
+    seq,
+    deleted: doc._deleted ? 1 : 0,
+  };
+}
+
+/** SQLite row → replication wire document, for config. `value` passes through. */
+export function configRowToDoc(row: ConfigTable): ReplicatedConfigDoc {
+  return {
+    id: row.id,
+    value: row.value,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    _deleted: row.deleted === 1,
+  };
+}
+
+/** Replication wire document → SQLite row, for config. */
+export function configDocToRow(
+  doc: ReplicatedConfigDoc,
+  seq: number,
+): ConfigTable {
+  return {
+    id: doc.id,
+    value: doc.value,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
     seq,

@@ -38,6 +38,8 @@ describe("extractUrls", () => {
   });
 
   it("ignores non-http(s) and returns empty when there's no URL", () => {
-    expect(extractUrls("plain note, ftp://nope.com mailto:a@b.com")).toEqual([]);
+    expect(extractUrls("plain note, ftp://nope.com mailto:a@b.com")).toEqual(
+      [],
+    );
   });
 });

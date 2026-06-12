@@ -26,6 +26,7 @@ import { startEmbeds } from "./embeds/index.js";
 import { attachmentsSync } from "./sync/attachments.js";
 import { channelsSync } from "./sync/channels.js";
 import type { ReplicatedDoc, SyncCollection } from "./sync/collection.js";
+import { configSync } from "./sync/config.js";
 import { embedsSync } from "./sync/embeds.js";
 import { messagesSync } from "./sync/messages.js";
 import { pull } from "./sync/pull.js";
@@ -102,6 +103,7 @@ registerSyncRoutes(messagesSync);
 registerSyncRoutes(channelsSync);
 registerSyncRoutes(embedsSync);
 registerSyncRoutes(attachmentsSync);
+registerSyncRoutes(configSync);
 
 /**
  * Blob bytes (ATT-2). Content-addressed by sha256 and kept OFF the RxDB sync

@@ -2,6 +2,7 @@ import type { RxJsonSchema } from "rxdb";
 import type {
   AttachmentDoc,
   ChannelDoc,
+  ConfigDoc,
   EmbedDoc,
   MessageDoc,
 } from "./types.js";
@@ -80,7 +81,14 @@ export const embedSchema: RxJsonSchema<EmbedDoc> = {
     createdAt: { type: "number" },
     updatedAt: { type: "number" },
   },
-  required: ["id", "messageId", "url", "sourceUpdatedAt", "createdAt", "updatedAt"],
+  required: [
+    "id",
+    "messageId",
+    "url",
+    "sourceUpdatedAt",
+    "createdAt",
+    "updatedAt",
+  ],
 } as const;
 
 export const embedMigrationStrategies = {};
@@ -120,3 +128,25 @@ export const attachmentSchema: RxJsonSchema<AttachmentDoc> = {
 export const attachmentMigrationStrategies = {
   1: (doc: AttachmentDoc) => doc,
 };
+
+/**
+ * RxDB JSON schema for the `config` collection — a small synced key-value store
+ * (today: the UI theme). `value` is an opaque JSON string, so the schema stays
+ * trivial and new settings need no migration. Mirrors the others: `_deleted` is
+ * RxDB-owned (absent) and the string primary key declares `maxLength`.
+ */
+export const configSchema: RxJsonSchema<ConfigDoc> = {
+  title: "config schema",
+  version: 0,
+  primaryKey: "id",
+  type: "object",
+  properties: {
+    id: { type: "string", maxLength: 64 },
+    value: { type: "string" },
+    createdAt: { type: "number" },
+    updatedAt: { type: "number" },
+  },
+  required: ["id", "value", "createdAt", "updatedAt"],
+} as const;
+
+export const configMigrationStrategies = {};

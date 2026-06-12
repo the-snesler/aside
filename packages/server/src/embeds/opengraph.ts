@@ -57,7 +57,8 @@ export async function fetchOpenGraph(url: string): Promise<OgResult> {
 
   const title =
     str(parsed.ogTitle) ?? str(parsed.twitterTitle) ?? htmlTitle(html);
-  const description = str(parsed.ogDescription) ?? str(parsed.twitterDescription);
+  const description =
+    str(parsed.ogDescription) ?? str(parsed.twitterDescription);
   const image = resolveImage(
     firstImage(parsed.ogImage) ?? firstImage(parsed.twitterImage),
     finalUrl,
@@ -105,7 +106,8 @@ async function fetchHtml(
 
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get("location");
-      if (!location) throw new OgFetchError(`redirect ${res.status} without location`);
+      if (!location)
+        throw new OgFetchError(`redirect ${res.status} without location`);
       await res.body?.cancel().catch(() => {});
       url = new URL(location, url).toString();
       continue;
@@ -119,7 +121,9 @@ async function fetchHtml(
     const contentType = res.headers.get("content-type") ?? "";
     if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) {
       await res.body?.cancel().catch(() => {});
-      throw new OgFetchError(`unsupported content-type: ${contentType || "none"}`);
+      throw new OgFetchError(
+        `unsupported content-type: ${contentType || "none"}`,
+      );
     }
 
     return { html: await readCapped(res), finalUrl: url };
@@ -169,7 +173,8 @@ async function assertPublicUrl(raw: string): Promise<void> {
     ? [host]
     : (await resolveHost(host)).map((entry) => entry.address);
 
-  if (addresses.length === 0) throw new OgFetchError(`could not resolve ${host}`);
+  if (addresses.length === 0)
+    throw new OgFetchError(`could not resolve ${host}`);
   for (const address of addresses) {
     if (isBlockedAddress(address)) {
       throw new OgFetchError(`refusing to fetch private address ${address}`);
@@ -177,9 +182,7 @@ async function assertPublicUrl(raw: string): Promise<void> {
   }
 }
 
-async function resolveHost(
-  host: string,
-): Promise<Array<{ address: string }>> {
+async function resolveHost(host: string): Promise<Array<{ address: string }>> {
   try {
     return await lookup(host, { all: true });
   } catch {
@@ -197,7 +200,10 @@ export function isBlockedAddress(ip: string): boolean {
 
 function isBlockedV4(ip: string): boolean {
   const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)
+  ) {
     return true;
   }
   const [a, b] = parts;
@@ -244,7 +250,10 @@ function firstImage(value: unknown): string | undefined {
 }
 
 /** Resolves a possibly-relative image URL against the page and keeps only http(s). */
-function resolveImage(image: string | undefined, base: string): string | undefined {
+function resolveImage(
+  image: string | undefined,
+  base: string,
+): string | undefined {
   if (!image) return undefined;
   try {
     const resolved = new URL(image, base);

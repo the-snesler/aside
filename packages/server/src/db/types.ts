@@ -74,6 +74,22 @@ export interface AttachmentsTable {
 }
 
 /**
+ * Synced key-value app config (today: the UI theme). Goes through the same
+ * protocol as messages/channels — server-owned `seq` cursor + soft-delete flag.
+ * `value` is an opaque JSON string the sync layer passes through untouched.
+ */
+export interface ConfigTable {
+  id: string;
+  value: string;
+  created_at: number;
+  updated_at: number;
+  /** server-owned replication cursor */
+  seq: number;
+  /** 0 | 1 — SQLite has no native boolean */
+  deleted: number;
+}
+
+/**
  * Server-only cache of fetched OpenGraph metadata, keyed by URL so the same link
  * across many messages (e.g. a feed importing duplicates) is fetched once. NOT
  * synced — like {@link FeedSourcesTable}, it has no `seq`/`deleted`. `payload` is
@@ -138,6 +154,7 @@ export interface Database {
   messages: MessagesTable;
   channels: ChannelsTable;
   embeds: EmbedsTable;
+  config: ConfigTable;
   og_cache: OgCacheTable;
   attachments: AttachmentsTable;
   blobs: BlobsTable;

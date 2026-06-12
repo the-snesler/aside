@@ -16,11 +16,13 @@ export function LinkPreviewCard({ embed }: Props) {
       href={embed.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-1.5 flex max-w-md gap-3 overflow-hidden rounded border border-l-2 border-divider border-l-accent bg-sidebar p-3 no-underline transition-colors hover:bg-hover"
+      className="mt-1.5 flex max-w-md gap-3 overflow-hidden rounded-xl border border-l-[3px] border-divider border-l-accent bg-panel p-3 no-underline shadow-sm transition-colors hover:bg-hover"
     >
       <div className="min-w-0 flex-1">
         {embed.siteName && (
-          <div className="truncate text-xs text-muted">{embed.siteName}</div>
+          <div className="truncate font-mono text-[11px] text-muted">
+            {embed.siteName}
+          </div>
         )}
         {embed.title && (
           <div className="truncate font-medium text-ink">{embed.title}</div>

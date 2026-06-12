@@ -1,6 +1,7 @@
 import type {
   AttachmentDoc,
   ChannelDoc,
+  ConfigDoc,
   EmbedDoc,
   MessageDoc,
 } from "@aside/shared";
@@ -32,11 +33,13 @@ export type MessageCollection = RxCollection<MessageDoc>;
 export type ChannelCollection = RxCollection<ChannelDoc>;
 export type EmbedCollection = RxCollection<EmbedDoc>;
 export type AttachmentCollection = RxCollection<AttachmentDoc>;
+export type ConfigCollection = RxCollection<ConfigDoc>;
 export interface AsideCollections {
   messages: MessageCollection;
   channels: ChannelCollection;
   embeds: EmbedCollection;
   attachments: AttachmentCollection;
+  config: ConfigCollection;
 }
 export type AsideDatabase = RxDatabase<AsideCollections>;
 

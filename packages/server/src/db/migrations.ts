@@ -103,6 +103,27 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .column("message_id")
     .execute();
 
+  // Synced key-value config (today: the UI theme). Same synced shape as the
+  // others — server-owned seq cursor + soft-delete. `value` is an opaque JSON
+  // string. New table — no backfill.
+  await db.schema
+    .createTable("config")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("value", "text", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
+    .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
+    .execute();
+
+  await db.schema
+    .createIndex("config_seq")
+    .ifNotExists()
+    .on("config")
+    .column("seq")
+    .execute();
+
   // Server-only URL→OpenGraph cache. Not synced (no seq/deleted); dedupes fetches
   // of the same link across messages and negative-caches dead URLs.
   await db.schema

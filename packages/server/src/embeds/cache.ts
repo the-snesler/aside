@@ -4,9 +4,7 @@ import { fetchOpenGraph, type OgResult } from "./opengraph.js";
 const OK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // refetch a successful preview weekly
 const FAIL_TTL_MS = 6 * 60 * 60 * 1000; // negative-cache a dead URL for 6h
 
-export type CachedOg =
-  | { status: "ok"; result: OgResult }
-  | { status: "error" };
+export type CachedOg = { status: "ok"; result: OgResult } | { status: "error" };
 
 /**
  * Returns OpenGraph metadata for a URL, fetching + caching on a miss (OG-1's

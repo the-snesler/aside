@@ -4,12 +4,19 @@ import {
   type EmbedDoc,
   type MessageDoc,
 } from "@aside/shared";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RxDocument } from "rxdb";
+import IconArrowUp from "~icons/lucide/arrow-up";
 import IconCopy from "~icons/lucide/copy";
-import IconInbox from "~icons/lucide/inbox";
+import IconHash from "~icons/lucide/hash";
+import IconImage from "~icons/lucide/image";
+import IconLink from "~icons/lucide/link";
+import IconList from "~icons/lucide/list";
 import IconPaperclip from "~icons/lucide/paperclip";
 import IconPencil from "~icons/lucide/pencil";
+import IconSearch from "~icons/lucide/search";
+import IconSettings from "~icons/lucide/settings";
+import IconSparkles from "~icons/lucide/sparkles";
 import IconTrash from "~icons/lucide/trash-2";
 import IconX from "~icons/lucide/x";
 import type {
@@ -18,19 +25,31 @@ import type {
   EmbedCollection,
   MessageCollection,
 } from "../../db/database";
+import { channelColor } from "../channels/channelColor";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
-import { HOME_ID } from "../channels/home";
+import {
+  ALL_ID,
+  LINKS_ID,
+  PHOTOS_ID,
+  TODAY_ID,
+  isSmartView,
+  matchesView,
+  type NoteCounts,
+} from "../views";
 import { blobUrl, uploadBlob } from "../attachments/api";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { Markdown } from "./Markdown";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 
 interface Props {
   messages: MessageCollection;
   channels: ChannelCollection;
   embeds: EmbedCollection;
   attachments: AttachmentCollection;
-  channelId: string;
+  view: string;
+  onSelectView: (view: string) => void;
+  counts: NoteCounts;
+  onOpenSettings: () => void;
 }
 
 /** A file being uploaded for the next send (ATT-3). */
@@ -51,17 +70,25 @@ export function MessageList({
   channels,
   embeds,
   attachments,
-  channelId,
+  view,
+  onSelectView,
+  counts,
+  onOpenSettings,
 }: Props) {
-  const isHome = channelId === HOME_ID;
+  const smartView = isSmartView(view);
   const [docs, setDocs] = useState<RxDocument<MessageDoc>[]>([]);
   const [channelNames, setChannelNames] = useState<Map<string, string>>(
     new Map(),
   );
+  // Spaces, in sidebar order, for the mobile tab bar (the desktop sidebar has
+  // its own copy). Mobile has no sidebar, so spaces live alongside the filters.
+  const [channelList, setChannelList] = useState<
+    { id: string; name: string }[]
+  >([]);
   // OG-2: server-attached link previews, grouped by the message they belong to.
-  const [embedsByMessage, setEmbedsByMessage] = useState<Map<string, EmbedDoc[]>>(
-    new Map(),
-  );
+  const [embedsByMessage, setEmbedsByMessage] = useState<
+    Map<string, EmbedDoc[]>
+  >(new Map());
   // messageId → its attachments, for the cards rendered below each note.
   const [attachmentsByMessage, setAttachmentsByMessage] = useState<
     Map<string, RxDocument<AttachmentDoc>[]>
@@ -74,23 +101,29 @@ export function MessageList({
   // EDIT-1: which row is open for editing.
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Load all, then filter (Home shows every channel) + sort in JS. Matches the
-    // existing approach; a sort index is UI-3's concern.
-    const sub = messages.find().$.subscribe((found) => {
-      const scoped = isHome
-        ? [...found]
-        : found.filter((doc) => doc.channelId === channelId);
-      setDocs(scoped.sort((a, b) => a.createdAt - b.createdAt));
-    });
-    return () => sub.unsubscribe();
-  }, [messages, channelId, isHome]);
+  const composerRef = useRef<MarkdownEditorHandle>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // id → name map: drives both the header and the per-note channel badge shown
-    // in Home.
+    // Load all, sorted oldest→newest (chat order: newest sits by the composer).
+    // The view filter is applied below in JS so switching views needs no requery.
+    const sub = messages.find().$.subscribe((found) => {
+      setDocs([...found].sort((a, b) => a.createdAt - b.createdAt));
+    });
+    return () => sub.unsubscribe();
+  }, [messages]);
+
+  useEffect(() => {
+    // id → name map (header + per-note badge) and an ordered list (mobile tabs):
+    // default space pinned first, then oldest-created — matching the sidebar.
     const sub = channels.find().$.subscribe((found) => {
       setChannelNames(new Map(found.map((c) => [c.id, c.name])));
+      const sorted = [...found].sort((a, b) => {
+        if (a.id === DEFAULT_CHANNEL_ID) return -1;
+        if (b.id === DEFAULT_CHANNEL_ID) return 1;
+        return a.createdAt - b.createdAt;
+      });
+      setChannelList(sorted.map((c) => ({ id: c.id, name: c.name })));
     });
     return () => sub.unsubscribe();
   }, [channels]);
@@ -125,10 +158,22 @@ export function MessageList({
     return () => sub.unsubscribe();
   }, [attachments]);
 
-  const groups = useMemo(() => groupByDay(docs), [docs]);
-  const headerName = isHome
-    ? "Home"
-    : (channelNames.get(channelId) ?? channelId);
+  // The Photos filter needs to know which notes carry an image attachment.
+  const imageMessageIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const [messageId, list] of attachmentsByMessage) {
+      if (list.some((a) => a.mimeType.startsWith("image/"))) ids.add(messageId);
+    }
+    return ids;
+  }, [attachmentsByMessage]);
+
+  const visibleDocs = useMemo(
+    () => docs.filter((doc) => matchesView(view, doc, imageMessageIds)),
+    [docs, view, imageMessageIds],
+  );
+  const groups = useMemo(() => groupByDay(visibleDocs), [visibleDocs]);
+
+  const meta = headerMeta(view, channelNames, counts);
 
   function addFiles(files: File[]) {
     // ATT-3: stage each file with an instant local thumbnail, then upload its
@@ -191,8 +236,8 @@ export function MessageList({
 
     // CH-4: a #tag files the note in an existing channel of that name and is
     // stripped from the saved text. With no match the note stays in the current
-    // view (or #general from Home) and the tag is kept as plain text.
-    let targetChannelId = isHome ? DEFAULT_CHANNEL_ID : channelId;
+    // space (or #general from a smart view) and the tag is kept as plain text.
+    let targetChannelId = smartView ? DEFAULT_CHANNEL_ID : view;
     let body = trimmed;
     if (trimmed) {
       const tag = parseChannelTag(trimmed);
@@ -269,31 +314,98 @@ export function MessageList({
   }
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-chat">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-divider px-4 font-semibold shadow-sm">
-        {isHome ? (
-          <>
-            <IconInbox className="h-4 w-4 text-muted" />
-            Home
-          </>
-        ) : (
-          <>
-            <span className="text-muted">#</span> {headerName}
-          </>
-        )}
+    <main className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat md:-ml-5 md:rounded-[28px] md:shadow-xl md:ring-1 md:ring-black/5">
+      {/* Desktop header: current view + count. */}
+      <header className="hidden h-14 shrink-0 items-center gap-2.5 px-6 md:flex">
+        <meta.Icon className="h-5 w-5 text-accent" />
+        <h1 className="text-lg font-semibold text-ink">
+          {smartView ? meta.label : `#${meta.label}`}
+        </h1>
+        <span className="text-sm tabular-nums text-muted">{meta.count}</span>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      {/* Mobile header: title row + horizontally-scrolling filter tabs. */}
+      <div className="shrink-0 px-4 pt-4 md:hidden">
+        <div className="mb-3 flex items-center gap-2">
+          <img src="/aside-logo.svg" alt="" className="h-6 w-6" />
+          <h1 className="flex-1 text-lg font-semibold text-ink">
+            {smartView ? meta.label : `#${meta.label}`}
+          </h1>
+          <button
+            type="button"
+            aria-label="Search"
+            className="rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
+          >
+            <IconSearch className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="Feeds settings"
+            className="rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
+          >
+            <IconSettings className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          {MOBILE_TABS.map(({ id, label, Icon, key }) => {
+            const active = view === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSelectView(id)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-active text-accent"
+                    : "bg-panel text-muted ring-1 ring-divider"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+                <span className="tabular-nums opacity-70">{counts[key]}</span>
+              </button>
+            );
+          })}
+          {channelList.length > 0 && (
+            <span className="mx-0.5 my-1 w-px shrink-0 bg-divider" />
+          )}
+          {channelList.map((ch) => {
+            const active = view === ch.id;
+            return (
+              <button
+                key={ch.id}
+                type="button"
+                onClick={() => onSelectView(ch.id)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-active text-ink"
+                    : "bg-panel text-muted ring-1 ring-divider"
+                }`}
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-[3px]"
+                  style={{ backgroundColor: channelColor(ch.name) }}
+                />
+                #{ch.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-3 md:px-6">
         {groups.length === 0 && (
-          <p className="text-muted">
-            {isHome ? "No notes yet." : "No notes in this channel yet."}
+          <p className="px-2 py-8 text-center text-sm text-muted">
+            {smartView ? "No notes here yet." : "No notes in this space yet."}
           </p>
         )}
         {groups.map((group) => (
           <section key={group.key}>
-            <div className="my-3 flex items-center gap-3 text-xs text-muted">
-              <span className="h-px flex-1 bg-divider" />
-              <span className="font-medium">{group.label}</span>
+            <div className="mb-1 mt-4 flex items-center gap-3 first:mt-0">
+              <span className="text-xs font-semibold text-muted">
+                {group.label}
+              </span>
               <span className="h-px flex-1 bg-divider" />
             </div>
             <ul className="flex flex-col">
@@ -302,61 +414,64 @@ export function MessageList({
                 return (
                   <li
                     key={doc.id}
-                    className="group relative flex gap-3 rounded px-2 py-1 hover:bg-hover"
+                    className="group relative flex gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-hover md:px-3"
                   >
-                    <span className="w-12 shrink-0 pt-0.5 text-right text-xs text-muted">
+                    <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
                       {formatTime(doc.createdAt)}
                     </span>
-                    {isHome && (
-                      <span className="mt-px shrink-0 self-start rounded bg-active px-1.5 py-0.5 text-[11px] text-muted">
-                        #{channelNames.get(doc.channelId) ?? "unknown"}
-                      </span>
-                    )}
-                    {isEditing ? (
-                      <div className="min-w-0 flex-1">
-                        <MarkdownEditor
-                          key={doc.id}
-                          initialValue={doc.text}
-                          autoFocus
-                          onSubmit={(t) => void saveEdit(doc, t)}
-                          onCancel={cancelEdit}
-                          className="max-h-[50vh] w-full overflow-y-auto rounded-lg bg-rail px-3 py-2 text-ink outline-none focus:ring-1 focus:ring-accent"
-                        />
-                        <div className="mt-1 text-xs text-muted">
-                          escape to{" "}
-                          <button
-                            type="button"
-                            onClick={cancelEdit}
-                            className="text-accent hover:underline"
-                          >
-                            cancel
-                          </button>{" "}
-                          • enter to save • shift+enter for newline
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex min-w-0 flex-1 flex-col gap-1">
-                        {doc.text && (
-                          <Markdown
-                            text={doc.text}
-                            className="break-words text-ink"
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      {smartView && (
+                        <span className="w-fit rounded-md bg-hover px-2 py-0.5 text-[11px] font-medium text-muted">
+                          <span className="opacity-60">#</span>{" "}
+                          {channelNames.get(doc.channelId) ?? "unknown"}
+                        </span>
+                      )}
+                      {isEditing ? (
+                        <div className="min-w-0 flex-1">
+                          <MarkdownEditor
+                            key={doc.id}
+                            initialValue={doc.text}
+                            autoFocus
+                            onSubmit={(t) => void saveEdit(doc, t)}
+                            onCancel={cancelEdit}
+                            className="max-h-[50vh] w-full overflow-y-auto rounded-xl bg-panel px-3 py-2 text-ink outline-none ring-1 ring-accent"
                           />
-                        )}
-                        {embedsByMessage.get(doc.id)?.map((embed) => (
-                          <LinkPreviewCard key={embed.id} embed={embed} />
-                        ))}
-                        <AttachmentCards
-                          items={attachmentsByMessage.get(doc.id)}
-                        />
-                      </div>
-                    )}
+                          <div className="mt-1 text-xs text-muted">
+                            escape to{" "}
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              className="text-accent hover:underline"
+                            >
+                              cancel
+                            </button>{" "}
+                            • enter to save • shift+enter for newline
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {doc.text && (
+                            <Markdown
+                              text={doc.text}
+                              className="break-words text-ink"
+                            />
+                          )}
+                          {embedsByMessage.get(doc.id)?.map((embed) => (
+                            <LinkPreviewCard key={embed.id} embed={embed} />
+                          ))}
+                          <AttachmentCards
+                            items={attachmentsByMessage.get(doc.id)}
+                          />
+                        </>
+                      )}
+                    </div>
                     {!isEditing && (
-                      <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-1 rounded bg-rail px-1 py-0.5 shadow group-hover:flex">
+                      <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider group-hover:flex">
                         <button
                           type="button"
                           onClick={() => startEdit(doc)}
                           aria-label="Edit"
-                          className="rounded p-1 text-muted hover:text-ink"
+                          className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
                         >
                           <IconPencil className="h-4 w-4" />
                         </button>
@@ -364,7 +479,7 @@ export function MessageList({
                           type="button"
                           onClick={() => void copyMessage(doc)}
                           aria-label="Copy"
-                          className="rounded p-1 text-muted hover:text-ink"
+                          className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
                         >
                           <IconCopy className="h-4 w-4" />
                         </button>
@@ -372,7 +487,7 @@ export function MessageList({
                           type="button"
                           onClick={() => void deleteMessage(doc)}
                           aria-label="Delete"
-                          className="rounded p-1 text-muted hover:text-danger"
+                          className="rounded-md p-1 text-muted hover:bg-hover hover:text-danger"
                         >
                           <IconTrash className="h-4 w-4" />
                         </button>
@@ -386,7 +501,7 @@ export function MessageList({
         ))}
       </div>
 
-      <div className="shrink-0 px-4 pb-4">
+      <div className="shrink-0 px-4 pb-4 pt-1 md:px-6">
         {pending.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
             {pending.map((item) => (
@@ -395,15 +510,15 @@ export function MessageList({
                   <img
                     src={item.localUrl}
                     alt={item.fileName}
-                    className="h-16 w-16 rounded border border-divider object-cover"
+                    className="h-16 w-16 rounded-lg border border-divider object-cover"
                   />
                 ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded border border-divider bg-rail text-muted">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-divider bg-rail text-muted">
                     <IconPaperclip className="h-5 w-5" />
                   </div>
                 )}
                 {item.status !== "done" && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded bg-black/50 text-xs text-white">
+                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 text-xs text-white">
                     {item.status === "uploading" ? "…" : "!"}
                   </div>
                 )}
@@ -411,7 +526,7 @@ export function MessageList({
                   type="button"
                   onClick={() => removePending(item.tempId)}
                   aria-label="Remove attachment"
-                  className="absolute -right-1.5 -top-1.5 rounded-full bg-rail p-0.5 text-muted shadow hover:text-ink"
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-panel p-0.5 text-muted shadow ring-1 ring-divider hover:text-ink"
                 >
                   <IconX className="h-3 w-3" />
                 </button>
@@ -419,18 +534,82 @@ export function MessageList({
             ))}
           </div>
         )}
-        <MarkdownEditor
-          key={composerKey}
-          initialValue=""
-          autoFocus
-          placeholder={isHome ? "Jot a note…" : `Message #${headerName}`}
-          onSubmit={(t) => void handleSend(t)}
-          onAddFiles={addFiles}
-          className="max-h-[50vh] w-full overflow-y-auto rounded-lg bg-rail px-4 py-3 text-ink outline-none focus:ring-1 focus:ring-accent"
-        />
+        <div className="flex items-end gap-2 rounded-2xl bg-panel px-2.5 py-2 shadow-lg ring-1 ring-divider">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length) addFiles(files);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Attach files"
+            className="shrink-0 rounded-lg p-2 text-muted transition-colors hover:bg-hover hover:text-ink"
+          >
+            <IconImage className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1 self-center">
+            <MarkdownEditor
+              key={composerKey}
+              ref={composerRef}
+              initialValue=""
+              autoFocus
+              placeholder={smartView ? "Jot a note…" : `Message #${meta.label}`}
+              onSubmit={(t) => void handleSend(t)}
+              onAddFiles={addFiles}
+              className="max-h-[40vh] w-full overflow-y-auto bg-transparent py-1.5 text-ink outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => composerRef.current?.submit()}
+            aria-label="Send note"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-md transition-opacity hover:opacity-90"
+          >
+            <IconArrowUp className="h-5 w-5" />
+          </button>
+        </div>
       </div>
     </main>
   );
+}
+
+/** The four filter tabs in the mobile header; `key` indexes into NoteCounts. */
+const MOBILE_TABS = [
+  { id: ALL_ID, label: "All", Icon: IconList, key: "all" as const },
+  { id: TODAY_ID, label: "Today", Icon: IconSparkles, key: "today" as const },
+  { id: LINKS_ID, label: "Links", Icon: IconLink, key: "links" as const },
+  { id: PHOTOS_ID, label: "Photos", Icon: IconImage, key: "photos" as const },
+];
+
+/** Header title, icon, and count for the current view. */
+function headerMeta(
+  view: string,
+  channelNames: Map<string, string>,
+  counts: NoteCounts,
+): { label: string; Icon: typeof IconList; count: number } {
+  switch (view) {
+    case ALL_ID:
+      return { label: "All Notes", Icon: IconList, count: counts.all };
+    case TODAY_ID:
+      return { label: "Today", Icon: IconSparkles, count: counts.today };
+    case LINKS_ID:
+      return { label: "Links", Icon: IconLink, count: counts.links };
+    case PHOTOS_ID:
+      return { label: "Photos", Icon: IconImage, count: counts.photos };
+    default:
+      return {
+        label: channelNames.get(view) ?? view,
+        Icon: IconHash,
+        count: counts.byChannel.get(view) ?? 0,
+      };
+  }
 }
 
 /**
@@ -454,7 +633,7 @@ function AttachmentCards({ items }: { items?: RxDocument<AttachmentDoc>[] }) {
               src={blobUrl(a.blobHash)}
               alt={a.fileName}
               loading="lazy"
-              className="max-h-80 max-w-xs rounded-lg border border-divider object-cover"
+              className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
             />
           </a>
         ) : (
@@ -463,7 +642,7 @@ function AttachmentCards({ items }: { items?: RxDocument<AttachmentDoc>[] }) {
             href={blobUrl(a.blobHash)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg border border-divider bg-rail px-3 py-2 text-sm text-ink hover:bg-hover"
+            className="flex items-center gap-2 rounded-xl border border-divider bg-panel px-3 py-2 text-sm text-ink hover:bg-hover"
           >
             <IconPaperclip className="h-4 w-4 shrink-0 text-muted" />
             <span className="max-w-[12rem] truncate">{a.fileName}</span>

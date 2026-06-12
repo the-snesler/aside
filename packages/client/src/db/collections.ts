@@ -5,6 +5,9 @@ import {
   channelConflictHandler,
   channelMigrationStrategies,
   channelSchema,
+  configConflictHandler,
+  configMigrationStrategies,
+  configSchema,
   embedConflictHandler,
   embedMigrationStrategies,
   embedSchema,
@@ -38,5 +41,10 @@ export const collections = {
     schema: attachmentSchema,
     migrationStrategies: attachmentMigrationStrategies,
     conflictHandler: attachmentConflictHandler,
+  },
+  config: {
+    schema: configSchema,
+    migrationStrategies: configMigrationStrategies,
+    conflictHandler: configConflictHandler,
   },
 };

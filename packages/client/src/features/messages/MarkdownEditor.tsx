@@ -1,6 +1,12 @@
 import Prism from "prismjs";
 import "prismjs/components/prism-markdown";
-import { useCallback, useEffect, useMemo } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+} from "react";
 import {
   createEditor,
   Editor,
@@ -143,15 +149,29 @@ interface MarkdownEditorProps {
   className?: string;
 }
 
-export function MarkdownEditor({
-  initialValue,
-  placeholder,
-  autoFocus,
-  onSubmit,
-  onCancel,
-  onAddFiles,
-  className,
-}: MarkdownEditorProps) {
+/** Imperative handle so an external control (e.g. a send button) can act on the editor. */
+export interface MarkdownEditorHandle {
+  /** Submit the current text, as if Enter were pressed. */
+  submit: () => void;
+  /** Move focus into the editor, caret at the end. */
+  focus: () => void;
+}
+
+export const MarkdownEditor = forwardRef<
+  MarkdownEditorHandle,
+  MarkdownEditorProps
+>(function MarkdownEditor(
+  {
+    initialValue,
+    placeholder,
+    autoFocus,
+    onSubmit,
+    onCancel,
+    onAddFiles,
+    className,
+  },
+  ref,
+) {
   const editor = useMemo(() => withHistory(withReact(createEditor())), []);
   // Read once: Slate owns the value after mount. Callers reset by remounting
   // (a changed `key`), so this never needs to track later prop changes.
@@ -227,6 +247,24 @@ export function MarkdownEditor({
     [onAddFiles],
   );
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      submit() {
+        onSubmit(slateToString(editor.children));
+      },
+      focus() {
+        try {
+          ReactEditor.focus(editor);
+          Transforms.select(editor, Editor.end(editor, []));
+        } catch {
+          // editor DOM not ready — harmless.
+        }
+      },
+    }),
+    [editor, onSubmit],
+  );
+
   useEffect(() => {
     if (!autoFocus) return;
     try {
@@ -253,4 +291,4 @@ export function MarkdownEditor({
       />
     </Slate>
   );
-}
+});

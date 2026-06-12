@@ -25,7 +25,14 @@ describe("isBlockedAddress (SSRF guard)", () => {
   });
 
   it("blocks IPv6 loopback / ULA / link-local / IPv4-mapped private", () => {
-    for (const ip of ["::1", "::", "fc00::1", "fd12::1", "fe80::1", "::ffff:127.0.0.1"]) {
+    for (const ip of [
+      "::1",
+      "::",
+      "fc00::1",
+      "fd12::1",
+      "fe80::1",
+      "::ffff:127.0.0.1",
+    ]) {
       expect(isBlockedAddress(ip), ip).toBe(true);
     }
   });

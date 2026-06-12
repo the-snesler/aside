@@ -2,6 +2,7 @@ import type { RxConflictHandler } from "rxdb";
 import type {
   AttachmentDoc,
   ChannelDoc,
+  ConfigDoc,
   EmbedDoc,
   MessageDoc,
 } from "./types.js";
@@ -63,3 +64,4 @@ export const channelConflictHandler = createLwwConflictHandler<ChannelDoc>();
 export const embedConflictHandler = createLwwConflictHandler<EmbedDoc>();
 export const attachmentConflictHandler =
   createLwwConflictHandler<AttachmentDoc>();
+export const configConflictHandler = createLwwConflictHandler<ConfigDoc>();

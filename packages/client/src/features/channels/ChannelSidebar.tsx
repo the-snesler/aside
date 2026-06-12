@@ -1,27 +1,38 @@
 import { DEFAULT_CHANNEL_ID, type ChannelDoc } from "@aside/shared";
 import { useEffect, useState } from "react";
 import type { RxDocument } from "rxdb";
-import IconInbox from "~icons/lucide/inbox";
+import IconLink from "~icons/lucide/link";
+import IconList from "~icons/lucide/list";
 import IconPlus from "~icons/lucide/plus";
+import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
+import IconSparkles from "~icons/lucide/sparkles";
 import IconTrash from "~icons/lucide/trash-2";
 import type { ChannelCollection } from "../../db/database";
-import { FeedSettings } from "../feeds/FeedSettings";
+import { ALL_ID, LINKS_ID, TODAY_ID, type NoteCounts } from "../views";
+import { channelColor } from "./channelColor";
 import { slugifyChannelName } from "./channelName";
-import { HOME_ID } from "./home";
 
 interface Props {
   collection: ChannelCollection;
-  selectedId: string;
-  onSelect: (id: string) => void;
+  counts: NoteCounts;
+  selectedView: string;
+  onSelect: (view: string) => void;
+  onOpenSettings: () => void;
 }
 
-export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
+export function ChannelSidebar({
+  collection,
+  counts,
+  selectedView,
+  onSelect,
+  onOpenSettings,
+}: Props) {
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
-  const [draftName, setDraftName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draftName, setDraftName] = useState("");
 
   useEffect(() => {
     const sub = collection.find().$.subscribe((found) => {
@@ -39,11 +50,12 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
   async function createChannel(e: React.FormEvent) {
     e.preventDefault();
     const name = slugifyChannelName(draftName);
+    setDraftName("");
+    setCreating(false);
     if (!name) return;
     const existing = await collection.findOne({ selector: { name } }).exec();
     if (existing) {
       onSelect(existing.id);
-      setDraftName("");
       return;
     }
     const now = Date.now();
@@ -53,7 +65,6 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
       createdAt: now,
       updatedAt: now,
     });
-    setDraftName("");
     onSelect(doc.id);
   }
 
@@ -69,51 +80,82 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
     // remove() must run on that, not the stale reference, or RxDB throws CONFLICT.
     const bumped = await doc.incrementalPatch({ updatedAt: Date.now() });
     await bumped.remove();
-    if (selectedId === doc.id) onSelect(HOME_ID);
+    if (selectedView === doc.id) onSelect(ALL_ID);
   }
 
+  const smartNav = [
+    { id: ALL_ID, label: "All Notes", Icon: IconList, count: counts.all },
+    { id: TODAY_ID, label: "Today", Icon: IconSparkles, count: counts.today },
+    { id: LINKS_ID, label: "Links", Icon: IconLink, count: counts.links },
+  ];
+
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-sidebar">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-divider px-4 font-semibold shadow-sm">
-        Aside
+    <aside
+      className="hidden h-full min-h-0 w-[268px] shrink-0 flex-col overflow-hidden md:flex md:pr-5"
+    >
+      <header className="flex h-14 shrink-0 items-center justify-between px-4">
+        <div className="flex items-center gap-2">
+          <img src="/aside-logo.svg" alt="" className="h-7 w-7" />
+          <span className="text-lg font-semibold text-ink">Aside</span>
+        </div>
         <button
           type="button"
-          onClick={() => setSettingsOpen(true)}
+          onClick={onOpenSettings}
           aria-label="Feeds settings"
           title="Feeds"
-          className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+          className="rounded-lg p-1.5 text-muted transition-colors hover:bg-hover hover:text-ink"
         >
           <IconSettings className="h-4 w-4" />
         </button>
       </header>
 
-      <FeedSettings
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        channels={collection}
-      />
+      <div className="px-3 pb-2">
+        <div className="flex items-center gap-2 rounded-xl bg-panel/60 px-3 py-2 text-sm text-muted shadow-sm ring-1 ring-divider">
+          <IconSearch className="h-4 w-4" />
+          <span className="flex-1 truncate">Jot or search…</span>
+          <kbd className="rounded bg-hover px-1.5 py-0.5 font-mono text-[11px] text-muted">
+            ⌘K
+          </kbd>
+        </div>
+      </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <button
-          type="button"
-          onClick={() => onSelect(HOME_ID)}
-          className={`mb-3 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm ${
-            selectedId === HOME_ID
-              ? "bg-active text-ink"
-              : "text-muted hover:bg-hover hover:text-ink"
-          }`}
-        >
-          <IconInbox className="h-4 w-4" />
-          Home
-        </button>
+      <nav className="flex-1 overflow-y-auto px-3 py-2">
+        <ul className="flex flex-col gap-0.5">
+          {smartNav.map(({ id, label, Icon, count }) => {
+            const active = selectedView === id;
+            return (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(id)}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
+                    ? "bg-active text-ink shadow-sm"
+                    : "text-ink/80 hover:bg-hover"
+                    }`}
+                >
+                  <Icon
+                    className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
+                  />
+                  <span className="flex-1 text-left">{label}</span>
+                  <span
+                    className={`text-xs tabular-nums ${active ? "text-accent" : "text-muted"}`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
 
-        <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">
-          Channels
+        <p className="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+          Spaces
         </p>
         <ul className="flex flex-col gap-0.5">
           {channels.map((doc) => {
-            const active = doc.id === selectedId;
+            const active = doc.id === selectedView;
             const isEditing = editingId === doc.id;
+            const count = counts.byChannel.get(doc.id) ?? 0;
             return (
               <li key={doc.id}>
                 {isEditing ? (
@@ -126,15 +168,12 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
                       if (e.key === "Enter") void commitRename(doc);
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="w-full rounded bg-rail px-2 py-1 text-sm text-ink outline-none ring-1 ring-accent"
+                    className="w-full rounded-xl bg-panel px-3 py-1.5 text-sm text-ink outline-none ring-1 ring-accent"
                   />
                 ) : (
                   <div
-                    className={`group flex items-center gap-1 rounded px-2 py-1 ${
-                      active
-                        ? "bg-active text-ink"
-                        : "text-muted hover:bg-hover hover:text-ink"
-                    }`}
+                    className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${active ? "bg-active text-ink shadow-sm" : "hover:bg-hover"
+                      }`}
                   >
                     <button
                       type="button"
@@ -143,21 +182,32 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
                         setEditingId(doc.id);
                         setEditDraft(doc.name);
                       }}
-                      className="min-w-0 flex-1 truncate text-left text-sm"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                       title="Click to open · double-click to rename"
                     >
-                      <span className="text-muted">#</span> {doc.name}
+                      <span
+                        className="h-3.5 w-3.5 shrink-0 rounded-[5px]"
+                        style={{ backgroundColor: channelColor(doc.name) }}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm text-ink/90">
+                        <span className="text-muted">#</span> {doc.name}
+                      </span>
                     </button>
                     {doc.id !== DEFAULT_CHANNEL_ID && (
                       <button
                         type="button"
                         onClick={() => void deleteChannel(doc)}
                         aria-label={`Delete #${doc.name}`}
-                        className="hidden shrink-0 rounded p-1 text-muted hover:text-danger group-hover:block"
+                        className="hidden shrink-0 rounded p-0.5 text-muted hover:text-danger group-hover:block"
                       >
                         <IconTrash className="h-3.5 w-3.5" />
                       </button>
                     )}
+                    <span
+                      className={`shrink-0 text-xs tabular-nums ${active ? "text-accent" : "text-muted"} ${doc.id !== DEFAULT_CHANNEL_ID ? "group-hover:hidden" : ""}`}
+                    >
+                      {count}
+                    </span>
                   </div>
                 )}
               </li>
@@ -166,24 +216,34 @@ export function ChannelSidebar({ collection, selectedId, onSelect }: Props) {
         </ul>
       </nav>
 
-      <form
-        onSubmit={createChannel}
-        className="flex shrink-0 gap-2 border-t border-divider p-3"
-      >
-        <input
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          placeholder="new-channel"
-          className="min-w-0 flex-1 rounded bg-rail px-2 py-1.5 text-sm text-ink outline-none placeholder:text-muted focus:ring-1 focus:ring-accent"
-        />
-        <button
-          type="submit"
-          aria-label="Create channel"
-          className="flex shrink-0 items-center rounded bg-accent px-3 text-white hover:opacity-90"
-        >
-          <IconPlus className="h-4 w-4" />
-        </button>
-      </form>
+      <div className="shrink-0 px-3 py-3">
+        {creating ? (
+          <form onSubmit={createChannel}>
+            <input
+              autoFocus
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setCreating(false);
+                  setDraftName("");
+                }
+              }}
+              placeholder="new-space"
+              className="w-full rounded-xl bg-panel px-3 py-2 text-sm text-ink outline-none ring-1 ring-accent placeholder:text-muted"
+            />
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-hover hover:text-ink"
+          >
+            <IconPlus className="h-4 w-4" />
+            New space
+          </button>
+        )}
+      </div>
     </aside>
   );
 }

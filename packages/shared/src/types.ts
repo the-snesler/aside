@@ -111,6 +111,29 @@ export interface AttachmentDoc {
 export type ReplicatedAttachmentDoc = AttachmentDoc & { _deleted: boolean };
 
 /**
+ * A synced key-value app setting. The whole point is a small store of config
+ * that replicates across devices like everything else — today it holds the UI
+ * theme palette (`id: "theme"`, `value`: a JSON-encoded color map). `value` is
+ * kept as an opaque JSON string rather than a typed object so new settings can
+ * be added without a schema migration, and so the dev-mode validator never has
+ * to reason about a free-form object. Like the other docs, `_deleted` is
+ * RxDB-owned and omitted here; it rides the wire via {@link ReplicatedConfigDoc}.
+ */
+export interface ConfigDoc {
+  /** the setting key, e.g. "theme" */
+  id: string;
+  /** JSON-encoded payload for this key */
+  value: string;
+  /** ms epoch */
+  createdAt: number;
+  /** ms epoch — last-write-time; used by conflict resolution */
+  updatedAt: number;
+}
+
+/** A config doc as it travels over the sync protocol, carrying RxDB's soft-delete flag. */
+export type ReplicatedConfigDoc = ConfigDoc & { _deleted: boolean };
+
+/**
  * Replication checkpoint. The server owns `seq` and uses it as the pull cursor,
  * so sync ordering does not depend on client clocks. Each collection tracks its
  * own checkpoint.

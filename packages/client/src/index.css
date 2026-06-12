@@ -1,21 +1,31 @@
 @import "tailwindcss";
 
 /*
- * Discord-inspired dark palette. Each token becomes a Tailwind color utility,
+ * Arc-inspired light palette. Each token becomes a Tailwind color utility,
  * e.g. `--color-sidebar` → `bg-sidebar` / `text-sidebar` / `border-sidebar`.
+ *
+ * These values are only the BOOTSTRAP fallback — the synced `config` "theme" doc
+ * is the runtime source of truth (see theme.ts), applied as inline `--color-*`
+ * overrides on :root once the local DB loads. They're kept in sync with
+ * DEFAULT_THEME so there's no color flash before that happens. Because this is a
+ * plain `@theme` (not `@theme inline`), utilities resolve to `var(--color-*)`,
+ * so those runtime overrides retint the whole app.
  */
 @theme {
-  --color-rail: #1e1f22;
-  --color-sidebar: #2b2d31;
-  --color-chat: #313338;
-  --color-panel: #2b2d31;
-  --color-hover: #35373c;
-  --color-active: #404249;
-  --color-divider: #3f4147;
-  --color-accent: #5865f2;
-  --color-ink: #dbdee1;
-  --color-muted: #949ba4;
-  --color-danger: #f23f43;
+  --color-grad1: #f8cbde;
+  --color-grad2: #bdd4f1;
+  --color-grad3: #dcc6f0;
+  --color-rail: #f1edf4;
+  --color-sidebar: #fbe7f0;
+  --color-chat: #fdfbf9;
+  --color-panel: #ffffff;
+  --color-hover: rgba(20, 12, 24, 0.045);
+  --color-active: #fbd9e8;
+  --color-divider: rgba(20, 12, 24, 0.08);
+  --color-accent: #e8478f;
+  --color-ink: #26222b;
+  --color-muted: #8d8795;
+  --color-danger: #e5484d;
 }
 
 @layer base {
@@ -27,7 +37,14 @@
 
   body {
     margin: 0;
-    background-color: var(--color-chat);
+    /* Pink (top-left) → blue (bottom-left) → lavender (right). Fixed so the
+       floating app card scrolls over a static wash. */
+    background-color: var(--color-grad1);
+    background-image:
+      radial-gradient(at 0% 0%, var(--color-grad1) 0px, transparent 55%),
+      radial-gradient(at 0% 100%, var(--color-grad2) 0px, transparent 55%),
+      radial-gradient(at 100% 50%, var(--color-grad3) 0px, transparent 60%);
+    background-attachment: fixed;
     color: var(--color-ink);
     font-family:
       system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
@@ -159,53 +176,53 @@
     background-color: var(--color-hover);
   }
 
-  /* highlight.js token palette, tuned to the dark Discord chrome. */
+  /* highlight.js token palette, tuned to the light surface (GitHub-light-ish). */
   .message-md .hljs-comment,
   .message-md .hljs-quote {
-    color: #7a8290;
+    color: #6e7781;
     font-style: italic;
   }
   .message-md .hljs-keyword,
   .message-md .hljs-selector-tag,
   .message-md .hljs-literal,
   .message-md .hljs-section {
-    color: #ff7b72;
+    color: #cf222e;
   }
   .message-md .hljs-string,
   .message-md .hljs-regexp,
   .message-md .hljs-meta .hljs-string {
-    color: #a5d6ff;
+    color: #0a3069;
   }
   .message-md .hljs-number,
   .message-md .hljs-symbol,
   .message-md .hljs-bullet {
-    color: #79c0ff;
+    color: #0550ae;
   }
   .message-md .hljs-title,
   .message-md .hljs-title.function_,
   .message-md .hljs-title.class_ {
-    color: #d2a8ff;
+    color: #8250df;
   }
   .message-md .hljs-built_in,
   .message-md .hljs-type {
-    color: #ffa657;
+    color: #953800;
   }
   .message-md .hljs-attr,
   .message-md .hljs-attribute,
   .message-md .hljs-property {
-    color: #79c0ff;
+    color: #0550ae;
   }
   .message-md .hljs-tag,
   .message-md .hljs-name {
-    color: #7ee787;
+    color: #116329;
   }
   .message-md .hljs-variable,
   .message-md .hljs-template-variable {
-    color: #ffa657;
+    color: #953800;
   }
   .message-md .hljs-meta,
   .message-md .hljs-doctag {
-    color: #8b949e;
+    color: #6e7781;
   }
   .message-md .hljs-emphasis {
     font-style: italic;

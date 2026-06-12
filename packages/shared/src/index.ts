@@ -7,6 +7,8 @@ export type {
   ReplicatedEmbedDoc,
   AttachmentDoc,
   ReplicatedAttachmentDoc,
+  ConfigDoc,
+  ReplicatedConfigDoc,
   Checkpoint,
 } from "./types.js";
 export { DEFAULT_CHANNEL_ID } from "./types.js";
@@ -16,6 +18,7 @@ export {
   channelConflictHandler,
   embedConflictHandler,
   attachmentConflictHandler,
+  configConflictHandler,
 } from "./conflict.js";
 export {
   messageMigrationStrategies,
@@ -26,10 +29,13 @@ export {
   embedSchema,
   attachmentMigrationStrategies,
   attachmentSchema,
+  configMigrationStrategies,
+  configSchema,
 } from "./schema.js";
 export {
   messageDocSchema,
   channelDocSchema,
   embedDocSchema,
   attachmentDocSchema,
+  configDocSchema,
 } from "./validation.js";
