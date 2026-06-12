@@ -11,6 +11,8 @@ What's grown on top of plain note sync: **channels** (`#tag`-routed), inline
 **attachments** backed by a content-addressed blob store, and **feeds** —
 channels that auto-populate from an external source (Twitter/X bookmarks today).
 
+For dev usage, assume the UI password is `admin`.
+
 ## Monorepo layout
 
 pnpm workspaces + Turbo. Three packages under `packages/`:
