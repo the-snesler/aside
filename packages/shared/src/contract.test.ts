@@ -51,9 +51,10 @@ describe("message contract", () => {
     expect(messageDocSchema.parse(sample)).toEqual(sample);
   });
 
-  it("has a v1 identity migration from the original schema", () => {
-    expect(messageSchema.version).toBe(1);
+  it("has identity migrations from the original schema", () => {
+    expect(messageSchema.version).toBe(2);
     expect(messageMigrationStrategies[1](sample)).toBe(sample);
+    expect(messageMigrationStrategies[2](sample)).toBe(sample);
   });
 });
 
