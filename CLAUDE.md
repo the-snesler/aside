@@ -3,8 +3,7 @@
 A self-hostable, local-first, Discord-inspired note-taking app. Single-tenant,
 single-container. The web UI writes to a local RxDB database that replicates to a
 thin sync server, which persists to SQLite — so notes work offline and sync
-across devices. See `ROADMAP.md` for the milestone breakdown and what's still
-open.
+across devices.
 
 What's grown on top of plain note sync: **channels** (`#tag`-routed), inline
 **Markdown** rendering + a Slate composer, **OpenGraph link previews**, file
@@ -149,7 +148,7 @@ Run from the repo root:
   and feed/blob data on a mounted `/data` volume. The runtime stage also installs
   Chromium for the Puppeteer feed source.
 - **CI**: `.github/workflows/ci.yml` builds and publishes a Docker image to GHCR
-  on push to `main`. Typecheck/test gating in CI is still open (ROADMAP CI-1).
+  on push to `main`. Typecheck/test gating in CI is still open.
 
 ### Environment variables (server)
 
