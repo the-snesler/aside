@@ -19,7 +19,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11.5.2 requires Node >= 22.13; the Docker runtime uses Node 24.
+          node-version: 22
           cache: pnpm
 
       # Skip the Puppeteer Chromium download — the feed source isn't exercised
