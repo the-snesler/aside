@@ -1,3 +1,4 @@
+import { rssSource } from "./sources/rss.js";
 import { twitterBookmarksSource } from "./sources/twitter.js";
 import type { FeedSource } from "./types.js";
 
@@ -7,7 +8,7 @@ import type { FeedSource } from "./types.js";
  * the only source today.
  */
 const sources = new Map<string, FeedSource>(
-  [twitterBookmarksSource].map((source) => [source.type, source]),
+  [twitterBookmarksSource, rssSource].map((source) => [source.type, source]),
 );
 
 export function getSource(type: string): FeedSource | undefined {

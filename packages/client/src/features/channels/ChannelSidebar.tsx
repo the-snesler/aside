@@ -28,6 +28,7 @@ const MESSAGE_DRAG_TYPE = "application/x-aside-message-id";
 interface Props {
   collection: ChannelCollection;
   counts: NoteCounts;
+  unreadChannelIds: Set<string>;
   selectedView: string;
   onSelect: (view: string) => void;
   onOpenSettings: () => void;
@@ -39,6 +40,7 @@ interface Props {
 export function ChannelSidebar({
   collection,
   counts,
+  unreadChannelIds,
   selectedView,
   onSelect,
   onOpenSettings,
@@ -191,6 +193,7 @@ export function ChannelSidebar({
             const active = doc.id === selectedView;
             const isEditing = editingId === doc.id;
             const count = counts.byChannel.get(doc.id) ?? 0;
+            const unread = unreadChannelIds.has(doc.id);
             return (
               <li key={doc.id}>
                 {isEditing ? (
@@ -258,6 +261,12 @@ export function ChannelSidebar({
                       >
                         {count}
                       </span>
+                      {unread && (
+                        <span
+                          title="New feed items"
+                          className="h-2 w-2 shrink-0 rounded-full bg-accent"
+                        />
+                      )}
                     </button>
                     {doc.id !== DEFAULT_CHANNEL_ID && (
                       <button

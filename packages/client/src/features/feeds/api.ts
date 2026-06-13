@@ -42,6 +42,7 @@ export interface CreateFeedInput {
 }
 
 export interface UpdateFeedInput {
+  channelId?: string;
   channelName?: string;
   cron?: string;
   enabled?: boolean;

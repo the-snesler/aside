@@ -15,12 +15,19 @@ import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
 import { addMessageChannel } from "./features/channels/membership";
+import { listFeeds, type Feed } from "./features/feeds/api";
+import { useFeedUnread } from "./features/feeds/unread";
 import { LightboxProvider } from "./features/lightbox/LightboxProvider";
 import { MessageList } from "./features/messages/MessageList";
 import { SearchPalette } from "./features/search/SearchPalette";
 import { useSearchIndex } from "./features/search/searchIndex";
 import { SettingsPage } from "./features/settings/SettingsPage";
-import { ALL_ID, SETTINGS_ID, useNoteCounts } from "./features/views";
+import {
+  ALL_ID,
+  SETTINGS_ID,
+  isSmartView,
+  useNoteCounts,
+} from "./features/views";
 import { useTheme } from "./theme";
 
 type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
@@ -170,9 +177,28 @@ function Workspace({
 }) {
   const counts = useNoteCounts(db.messages, db.attachments);
   const { channels, search } = useSearchIndex(db);
+  const [feeds, setFeeds] = useState<Feed[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
+  const { unreadChannelIds, markChannelRead } = useFeedUnread(
+    db.messages,
+    db.config,
+    feeds,
+  );
+
+  const reloadFeeds = useCallback(async () => {
+    setFeeds(await listFeeds());
+  }, []);
+
+  useEffect(() => {
+    void reloadFeeds().catch(() => undefined);
+    function onFocus() {
+      void reloadFeeds().catch(() => undefined);
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [reloadFeeds]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -195,17 +221,21 @@ function Workspace({
   );
 
   function selectView(nextView: string) {
+    if (nextView !== view && !isSmartView(nextView)) {
+      void markChannelRead(nextView);
+    }
     onSelect(nextView);
     setSidebarOpen(false);
   }
 
   const handleNavigateToNote = useCallback(
     (channelId: string, messageId: string) => {
+      if (channelId !== view) void markChannelRead(channelId);
       onSelect(channelId);
       setSidebarOpen(false);
       setFocusedMessageId(messageId);
     },
-    [onSelect],
+    [markChannelRead, onSelect, view],
   );
 
   const handleDropMessage = useCallback(
@@ -237,6 +267,7 @@ function Workspace({
         <ChannelSidebar
           collection={db.channels}
           counts={counts}
+          unreadChannelIds={unreadChannelIds}
           selectedView={view}
           onSelect={selectView}
           onOpenSettings={() => selectView(SETTINGS_ID)}
@@ -258,6 +289,7 @@ function Workspace({
               channels={db.channels}
               config={db.config}
               onOpenMenu={() => setSidebarOpen(true)}
+              onFeedsChanged={reloadFeeds}
             />
           ) : (
             <MessageList

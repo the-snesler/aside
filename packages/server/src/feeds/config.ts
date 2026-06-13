@@ -15,6 +15,8 @@ export interface CreateFeedInput {
 }
 
 export interface UpdateFeedInput {
+  /** target channel id; when set, future feed items write there */
+  channelId?: string;
   channelName?: string;
   cron?: string;
   enabled?: boolean;
@@ -47,7 +49,7 @@ export async function createFeed(input: CreateFeedInput): Promise<FeedConfig> {
   const row: FeedSourcesTable = {
     id: randomUUID(),
     type: input.type,
-    channel_id: input.channelId ?? randomUUID(),
+    channel_id: input.channelId?.trim() || randomUUID(),
     channel_name: slugifyChannelName(input.channelName),
     cron: input.cron?.trim() || DEFAULT_CRON,
     enabled: input.enabled === false ? 0 : 1,
@@ -68,6 +70,7 @@ export async function updateFeed(
   patch: UpdateFeedInput,
 ): Promise<FeedConfig | null> {
   const set: Partial<FeedSourcesTable> = { updated_at: Date.now() };
+  if (patch.channelId !== undefined) set.channel_id = patch.channelId.trim();
   if (patch.channelName !== undefined)
     set.channel_name = slugifyChannelName(patch.channelName);
   if (patch.cron !== undefined) set.cron = patch.cron.trim() || DEFAULT_CRON;

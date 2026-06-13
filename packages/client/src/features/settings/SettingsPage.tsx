@@ -26,6 +26,7 @@ interface Props {
   channels: ChannelCollection;
   config: ConfigCollection;
   onOpenMenu: () => void;
+  onFeedsChanged?: () => Promise<void>;
 }
 
 const sections: Array<{
@@ -73,7 +74,12 @@ const sections: Array<{
   },
 ];
 
-export function SettingsPage({ channels, config, onOpenMenu }: Props) {
+export function SettingsPage({
+  channels,
+  config,
+  onOpenMenu,
+  onFeedsChanged,
+}: Props) {
   const [activeSection, setActiveSection] = useState<SectionId>("ai");
   const current = sections.find((section) => section.id === activeSection)!;
 
@@ -135,7 +141,12 @@ export function SettingsPage({ channels, config, onOpenMenu }: Props) {
             </div>
 
             {activeSection === "ai" && <AiSettings />}
-            {activeSection === "feeds" && <FeedSettings channels={channels} />}
+            {activeSection === "feeds" && (
+              <FeedSettings
+                channels={channels}
+                onFeedsChanged={onFeedsChanged}
+              />
+            )}
             {activeSection === "appearance" && (
               <AppearanceSettings config={config} />
             )}

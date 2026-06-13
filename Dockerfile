@@ -45,13 +45,13 @@ ENV STATIC_DIR=./public
 ENV DATA_DIR=/data
 ENV PORT=3001
 WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends chromium \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=deploy /app/deploy/dist ./dist
 COPY --from=deploy /app/deploy/node_modules ./node_modules
 COPY --from=deploy /app/deploy/package.json ./package.json
 COPY --from=build /app/packages/client/dist ./public
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium \
-  && rm -rf /var/lib/apt/lists/*
 EXPOSE 3001
 VOLUME /data
 CMD ["node", "dist/index.js"]
