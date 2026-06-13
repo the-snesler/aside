@@ -1,6 +1,7 @@
 services:
   app:
     build: .
+    # image: ghcr.io/the-snesler/aside:latest
     ports:
       - "3001:3001"
     environment:
