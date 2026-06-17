@@ -428,6 +428,24 @@ export function MessageList({
     cancelEdit();
   }
 
+  async function toggleTask(doc: RxDocument<MessageDoc>, nextText: string) {
+    // Clicking a rendered task checkbox flips its marker in the source. Persist
+    // it like an edit: bump updatedAt so the change wins LWW conflict handling.
+    if (nextText === doc.text) return;
+    const updated = await doc.incrementalPatch({
+      text: nextText,
+      updatedAt: Date.now(),
+    });
+    setDocs((prev) => {
+      return matchesView(view, updated, imageMessageIds)
+        ? mergeDocs(
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
+        : prev.filter((item) => item.id !== updated.id);
+    });
+  }
+
   async function toggleMessageChannel(
     doc: RxDocument<MessageDoc>,
     channelId: string,
@@ -513,6 +531,7 @@ export function MessageList({
                   onStartEdit={startEdit}
                   onCancelEdit={cancelEdit}
                   onSaveEdit={saveEdit}
+                  onToggleTask={toggleTask}
                   onCopy={copyMessage}
                   onDelete={deleteMessage}
                   onToggleChannelPicker={(doc) =>

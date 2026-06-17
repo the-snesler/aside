@@ -31,6 +31,7 @@ export function MessageRow({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  onToggleTask,
   onCopy,
   onDelete,
   onToggleChannelPicker,
@@ -48,6 +49,7 @@ export function MessageRow({
   onStartEdit: (doc: RxDocument<MessageDoc>) => void;
   onCancelEdit: () => void;
   onSaveEdit: (doc: RxDocument<MessageDoc>, raw: string) => Promise<void>;
+  onToggleTask: (doc: RxDocument<MessageDoc>, nextText: string) => Promise<void>;
   onCopy: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onDelete: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onToggleChannelPicker: (doc: RxDocument<MessageDoc>) => void;
@@ -139,7 +141,11 @@ export function MessageRow({
         ) : (
           <>
             {doc.text && (
-              <Markdown text={doc.text} className="break-words text-ink" />
+              <Markdown
+                text={doc.text}
+                className="break-words text-ink"
+                onToggleTask={(nextText) => void onToggleTask(doc, nextText)}
+              />
             )}
             {embeds?.map((embed) => (
               <LinkPreviewCard
