@@ -531,6 +531,7 @@ export function MessageList({
         composerKey={composerKey}
         composerRef={composerRef}
         fileInputRef={fileInputRef}
+        channels={channelDocs}
         placeholder={smartView ? "Jot a note…" : `Message #${meta.label}`}
         onAddFiles={addFiles}
         onRemovePending={removePending}

@@ -120,6 +120,7 @@ export function MessageRow({
               key={doc.id}
               initialValue={doc.text}
               autoFocus
+              channels={channels}
               onSubmit={(text) => void onSaveEdit(doc, text)}
               onCancel={onCancelEdit}
               className="max-h-[50vh] w-full overflow-y-auto rounded-xl bg-panel px-3 py-2 text-ink outline-none ring-1 ring-accent"

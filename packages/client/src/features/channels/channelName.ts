@@ -19,6 +19,20 @@ export function parseChannelTag(text: string): string | null {
 }
 
 /**
+ * A `#partial` channel mention being typed at the end of `textBeforeCaret`, or
+ * null. Drives the composer's autocomplete dropdown (CH-4): the `#` must start
+ * the line or follow whitespace, mirroring {@link parseChannelTag}, and the
+ * query may be empty (the user just typed `#`). The `#`'s column in the line is
+ * `caretOffset - query.length - 1`.
+ */
+export function matchChannelMention(
+  textBeforeCaret: string,
+): { query: string } | null {
+  const match = textBeforeCaret.match(/(?:^|\s)#([a-z0-9-]*)$/i);
+  return match ? { query: match[1].toLowerCase() } : null;
+}
+
+/**
  * Removes the first `#tag` token (the one returned by {@link parseChannelTag})
  * from a message body and tidies the whitespace it leaves behind. Applied when a
  * note is actually routed to a channel, so the tag does not linger in the text.
