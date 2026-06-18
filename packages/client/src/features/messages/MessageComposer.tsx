@@ -12,6 +12,7 @@ interface Props {
   composerRef: RefObject<MarkdownEditorHandle>;
   fileInputRef: RefObject<HTMLInputElement>;
   placeholder: string;
+  channels: { id: string; name: string }[];
   onAddFiles: (files: File[]) => void;
   onRemovePending: (tempId: string) => void;
   onSend: (raw: string) => void;
@@ -23,6 +24,7 @@ export function MessageComposer({
   composerRef,
   fileInputRef,
   placeholder,
+  channels,
   onAddFiles,
   onRemovePending,
   onSend,
@@ -88,6 +90,7 @@ export function MessageComposer({
             initialValue=""
             autoFocus
             placeholder={placeholder}
+            channels={channels}
             onSubmit={(t) => onSend(t)}
             onAddFiles={onAddFiles}
             className="max-h-[40vh] w-full overflow-y-auto bg-transparent py-1.5 text-ink outline-none"

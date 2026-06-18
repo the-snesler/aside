@@ -6,19 +6,25 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useState,
 } from "react";
 import {
   createEditor,
   Editor,
   Node,
+  Range,
   Text,
   Transforms,
   type BaseEditor,
   type Descendant,
   type NodeEntry,
   type Path,
-  type Range,
 } from "slate";
+import { matchChannelMention } from "../channels/channelName";
+import {
+  ChannelMentionDropdown,
+  type MentionChannel,
+} from "./ChannelMentionDropdown";
 import { withHistory, type HistoryEditor } from "slate-history";
 import {
   Editable,
@@ -145,6 +151,11 @@ interface MarkdownEditorProps {
    * to keep the editor text-only.
    */
   onAddFiles?: (files: File[]) => void;
+  /**
+   * Existing channels for `#tag` autocomplete (CH-4). When provided, typing `#`
+   * opens a dropdown of matching channels; omit it to keep the editor plain.
+   */
+  channels?: MentionChannel[];
   /** Box chrome (background, rounding, padding, focus ring). */
   className?: string;
 }
@@ -168,6 +179,7 @@ export const MarkdownEditor = forwardRef<
     onSubmit,
     onCancel,
     onAddFiles,
+    channels,
     className,
   },
   ref,
@@ -185,6 +197,101 @@ export const MarkdownEditor = forwardRef<
     collectRanges(tokens, path, 0, ranges);
     return ranges;
   }, []);
+
+  // CH-4: channel `#tag` autocomplete. `mention` is the in-progress `#partial`
+  // token (its Slate range + query); recomputed on every selection change.
+  const [mention, setMention] = useState<{
+    target: Range;
+    query: string;
+  } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionPos, setMentionPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  const matches = useMemo<MentionChannel[]>(() => {
+    if (!mention || !channels) return [];
+    const q = mention.query;
+    return channels
+      .filter((c) => c.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+        const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 8);
+  }, [mention, channels]);
+
+  const mentionOpen =
+    mention !== null && matches.length > 0 && mentionPos !== null;
+
+  // Detect a `#partial` being typed at the caret. Each line is one paragraph
+  // with a single text child, so the caret offset is the column within the line.
+  const onChange = useCallback(() => {
+    const { selection } = editor;
+    if (
+      !channels ||
+      channels.length === 0 ||
+      !selection ||
+      !Range.isCollapsed(selection)
+    ) {
+      setMention(null);
+      return;
+    }
+    const [point] = Range.edges(selection);
+    const lineStart = Editor.start(editor, point.path.slice(0, 1));
+    const before = Editor.string(editor, { anchor: lineStart, focus: point });
+    const match = matchChannelMention(before);
+    if (!match) {
+      setMention(null);
+      return;
+    }
+    setMention({
+      target: {
+        anchor: {
+          path: point.path,
+          offset: point.offset - match.query.length - 1,
+        },
+        focus: point,
+      },
+      query: match.query,
+    });
+  }, [editor, channels]);
+
+  // Reset the highlight whenever the query changes.
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mention?.query]);
+
+  // Anchor the dropdown to the caret's DOM rect.
+  useEffect(() => {
+    if (!mention) {
+      setMentionPos(null);
+      return;
+    }
+    try {
+      const rect = ReactEditor.toDOMRange(
+        editor,
+        mention.target,
+      ).getBoundingClientRect();
+      setMentionPos({ top: rect.top, left: rect.left });
+    } catch {
+      setMentionPos(null);
+    }
+  }, [editor, mention]);
+
+  const selectMention = useCallback(
+    (name: string) => {
+      if (!mention) return;
+      Transforms.select(editor, mention.target);
+      Transforms.insertText(editor, `#${name} `);
+      setMention(null);
+      ReactEditor.focus(editor);
+    },
+    [editor, mention],
+  );
 
   const renderLeaf = useCallback(
     (props: RenderLeafProps) => <Leaf {...props} />,
@@ -208,6 +315,30 @@ export const MarkdownEditor = forwardRef<
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       // Don't submit mid-IME composition.
       if (event.nativeEvent.isComposing) return;
+      // CH-4: when the mention dropdown is open it captures navigation keys so
+      // Enter selects a channel instead of sending the note.
+      if (mentionOpen) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setMentionIndex((i) => Math.min(i + 1, matches.length - 1));
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setMentionIndex((i) => Math.max(i - 1, 0));
+          return;
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          event.preventDefault();
+          selectMention((matches[mentionIndex] ?? matches[0]).name);
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setMention(null);
+          return;
+        }
+      }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         onSubmit(slateToString(editor.children));
@@ -219,7 +350,15 @@ export const MarkdownEditor = forwardRef<
         onCancel?.();
       }
     },
-    [editor, onSubmit, onCancel],
+    [
+      editor,
+      onSubmit,
+      onCancel,
+      mentionOpen,
+      matches,
+      mentionIndex,
+      selectMention,
+    ],
   );
 
   // ATT-3: intercept file paste/drop and hand the files up. Calling
@@ -277,7 +416,7 @@ export const MarkdownEditor = forwardRef<
   }, []);
 
   return (
-    <Slate editor={editor} initialValue={initial}>
+    <Slate editor={editor} initialValue={initial} onChange={onChange}>
       <Editable
         className={className}
         decorate={decorate}
@@ -289,6 +428,15 @@ export const MarkdownEditor = forwardRef<
         placeholder={placeholder}
         spellCheck
       />
+      {mentionOpen && mentionPos && (
+        <ChannelMentionDropdown
+          items={matches}
+          activeIndex={mentionIndex}
+          position={mentionPos}
+          onSelect={selectMention}
+          onHover={setMentionIndex}
+        />
+      )}
     </Slate>
   );
 });
