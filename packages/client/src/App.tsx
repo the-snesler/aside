@@ -22,12 +22,8 @@ import { MessageList } from "./features/messages/MessageList";
 import { SearchPalette } from "./features/search/SearchPalette";
 import { useSearchIndex } from "./features/search/searchIndex";
 import { SettingsPage } from "./features/settings/SettingsPage";
-import {
-  ALL_ID,
-  SETTINGS_ID,
-  isSmartView,
-  useNoteCounts,
-} from "./features/views";
+import { useRoutedView } from "./features/routing";
+import { SETTINGS_ID, isSmartView, useNoteCounts } from "./features/views";
 import { useTheme } from "./theme";
 
 type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
@@ -121,8 +117,10 @@ export function App() {
 
 function AuthedApp({ onLogout }: { onLogout: () => void }) {
   const [db, setDb] = useState<AsideDatabase | null>(null);
-  // Open on "All Notes" — the unified view across every space.
-  const [view, setView] = useState<string>(ALL_ID);
+  // The URL is the source of truth for the current view, so reloads and
+  // back/forward land on the section you were looking at (defaults to "All
+  // Notes" at the root path).
+  const [view, setView] = useRoutedView();
 
   useEffect(() => {
     let active = true;
