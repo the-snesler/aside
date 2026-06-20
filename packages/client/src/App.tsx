@@ -28,6 +28,9 @@ import { useTheme } from "./theme";
 
 type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
 
+/** Mobile drawer rail width; the foreground card slides this far to expose it. */
+const SIDEBAR_WIDTH = 280;
+
 export function App() {
   const [authMode, setAuthMode] = useState<AuthMode>(() =>
     getAuthToken() ? "app" : "checking",
@@ -209,14 +212,29 @@ function Workspace({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Finger-tracked drawer: while dragging we drive the offset 1:1 with the
+  // finger (clamped to the rail width); on release we snap open/closed on a
+  // distance-or-velocity threshold. `drag` being non-null means a gesture is in
+  // flight, which also turns the CSS transition off so it tracks instantly.
+  const [drag, setDrag] = useState<number | null>(null);
   const bindDrag = useDrag(
     ({ last, movement: [mx], velocity: [vx], direction: [dx] }) => {
-      if (!last) return;
-      if (dx > 0 && (mx > 64 || vx > 0.45)) setSidebarOpen(true);
-      if (dx < 0 && (mx < -64 || vx > 0.45)) setSidebarOpen(false);
+      const base = sidebarOpen ? SIDEBAR_WIDTH : 0;
+      if (last) {
+        setDrag(null);
+        if (dx > 0 && (mx > 64 || vx > 0.45)) setSidebarOpen(true);
+        else if (dx < 0 && (mx < -64 || vx > 0.45)) setSidebarOpen(false);
+        return;
+      }
+      setDrag(Math.min(SIDEBAR_WIDTH, Math.max(0, base + mx)));
     },
     { axis: "x", filterTaps: true },
   );
+
+  const sidebarOffset = drag ?? (sidebarOpen ? SIDEBAR_WIDTH : 0);
+  // The foreground card rounds its corners as it slides aside, matching the
+  // phone's screen radius (à la the Claude iOS app). Reset to square on desktop.
+  const cardRadius = Math.round((sidebarOffset / SIDEBAR_WIDTH) * 28);
 
   function selectView(nextView: string) {
     if (nextView !== view && !isSmartView(nextView)) {
@@ -275,10 +293,15 @@ function Workspace({
         />
         <div
           {...bindDrag()}
-          className="relative z-10 flex h-full min-w-0 flex-1 translate-x-[var(--sidebar-offset)] touch-pan-y transition-transform duration-200 ease-out md:translate-x-0"
+          className={`relative z-10 flex h-full min-w-0 flex-1 translate-x-[var(--sidebar-offset)] touch-pan-y overflow-hidden rounded-[var(--card-radius)] md:translate-x-0 md:overflow-visible md:rounded-none ${
+            drag === null
+              ? "transition-[transform,border-radius] duration-200 ease-out"
+              : ""
+          }`}
           style={
             {
-              "--sidebar-offset": sidebarOpen ? "280px" : "0px",
+              "--sidebar-offset": `${sidebarOffset}px`,
+              "--card-radius": `${cardRadius}px`,
             } as React.CSSProperties
           }
         >

@@ -35,6 +35,14 @@
     height: 100%;
   }
 
+  /* Stop the page itself from rubber-banding on iOS so the app feels native;
+     inner scrollers (message list, sidebar) opt into `overscroll-contain` so
+     their bounce doesn't chain up to the document. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
   body {
     margin: 0;
     /* Pink (top-left) → blue (bottom-left) → lavender (right). Fixed so the
