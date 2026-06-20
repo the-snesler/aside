@@ -2,7 +2,18 @@ import type React from "react";
 import { useState } from "react";
 import { changePassword } from "../../auth";
 import type { ChannelCollection, ConfigCollection } from "../../db/database";
-import { DEFAULT_THEME } from "../../theme";
+import { useDisplay, type DisplaySettings } from "../../appearance";
+import {
+  ACCENT_PRESETS,
+  applyTheme,
+  DEFAULT_THEME,
+  HEX_TOKENS,
+  saveThemePalette,
+  THEME_PRESETS,
+  TOKEN_LABELS,
+  useThemePalette,
+  type ThemePalette,
+} from "../../theme";
 import { AiSettings } from "../ai/AiSettings";
 import { FeedSettings } from "../feeds/FeedSettings";
 import IconBell from "~icons/lucide/bell";
@@ -161,38 +172,219 @@ export function SettingsPage({
 }
 
 function AppearanceSettings({ config }: { config: ConfigCollection }) {
-  const [saved, setSaved] = useState(false);
+  const palette = useThemePalette(config);
+  const [display, updateDisplay] = useDisplay();
 
-  async function resetTheme() {
-    const now = Date.now();
-    await config.upsert({
-      id: "theme",
-      value: JSON.stringify(DEFAULT_THEME),
-      createdAt: now,
-      updatedAt: now,
-    });
-    setSaved(true);
+  // Persist the whole palette with one token overridden. Used by the accent
+  // picker and the advanced per-token editor.
+  function setToken(key: string, value: string) {
+    void saveThemePalette(config, { ...palette, [key]: value });
   }
 
+  const activePreset = THEME_PRESETS.find(
+    (preset) => JSON.stringify(preset.palette) === JSON.stringify(palette),
+  );
+
   return (
-    <div className="rounded-lg border border-divider bg-panel p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-ink">Theme palette</h3>
-          <p className="mt-1 text-sm text-muted">
-            Restore the default synced Aside colors on this device and any other
-            device that replicates settings.
-          </p>
+    <div className="flex flex-col gap-4">
+      {/* Theme presets */}
+      <div className="rounded-lg border border-divider bg-panel p-4">
+        <h3 className="text-sm font-semibold text-ink">Theme</h3>
+        <p className="mt-1 text-sm text-muted">
+          Pick a preset, then fine-tune the accent. Themes sync to every device.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {THEME_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => void saveThemePalette(config, preset.palette)}
+              className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition hover:border-accent ${
+                activePreset?.id === preset.id
+                  ? "border-accent ring-1 ring-accent"
+                  : "border-divider"
+              }`}
+            >
+              <PresetSwatch palette={preset.palette} />
+              <span className="text-xs font-medium text-ink">
+                {preset.label}
+              </span>
+            </button>
+          ))}
         </div>
+      </div>
+
+      {/* Accent color */}
+      <div className="rounded-lg border border-divider bg-panel p-4">
+        <h3 className="text-sm font-semibold text-ink">Accent color</h3>
+        <p className="mt-1 text-sm text-muted">
+          Used for buttons, links, and the active state.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="color"
+            aria-label="Accent color"
+            value={palette.accent}
+            // Live-preview while dragging; persist on commit.
+            onInput={(e) =>
+              applyTheme({ ...palette, accent: e.currentTarget.value })
+            }
+            onChange={(e) => setToken("accent", e.currentTarget.value)}
+            className="h-9 w-12 cursor-pointer rounded border border-divider bg-rail"
+          />
+          {ACCENT_PRESETS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              aria-label={`Use accent ${color}`}
+              onClick={() => setToken("accent", color)}
+              className={`h-7 w-7 rounded-full border transition hover:scale-110 ${
+                palette.accent.toLowerCase() === color.toLowerCase()
+                  ? "border-ink ring-2 ring-accent"
+                  : "border-divider"
+              }`}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Advanced per-token editor */}
+      <details className="rounded-lg border border-divider bg-panel p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-ink">
+          Advanced colors
+        </summary>
+        <p className="mt-1 text-sm text-muted">
+          Edit individual palette tokens. Overlay tokens (hover, dividers)
+          follow the preset and reset.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {HEX_TOKENS.map((key) => (
+            <label
+              key={key}
+              className="flex items-center gap-2 text-sm text-ink"
+            >
+              <input
+                type="color"
+                value={palette[key]}
+                onInput={(e) =>
+                  applyTheme({ ...palette, [key]: e.currentTarget.value })
+                }
+                onChange={(e) => setToken(key, e.currentTarget.value)}
+                className="h-7 w-9 shrink-0 cursor-pointer rounded border border-divider bg-rail"
+              />
+              <span className="min-w-0 truncate">
+                {TOKEN_LABELS[key] ?? key}
+              </span>
+            </label>
+          ))}
+        </div>
+      </details>
+
+      <div>
         <button
           type="button"
-          onClick={() => void resetTheme()}
-          className="rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+          onClick={() => void saveThemePalette(config, DEFAULT_THEME)}
+          className="rounded border border-divider bg-sidebar px-3 py-2 text-sm font-medium text-ink hover:bg-hover"
         >
-          Reset theme
+          Reset theme to default
         </button>
       </div>
-      {saved && <p className="mt-3 text-sm text-muted">Theme reset.</p>}
+
+      {/* Display preferences (per-device) */}
+      <div className="rounded-lg border border-divider bg-panel p-4">
+        <h3 className="text-sm font-semibold text-ink">Display</h3>
+        <p className="mt-1 text-sm text-muted">
+          These preferences are saved on this device only.
+        </p>
+        <div className="mt-4 flex flex-col gap-4">
+          <Segmented<DisplaySettings["density"]>
+            label="Density"
+            value={display.density}
+            onChange={(density) => updateDisplay({ density })}
+            options={[
+              { value: "comfortable", label: "Comfortable" },
+              { value: "compact", label: "Compact" },
+            ]}
+          />
+          <Segmented<DisplaySettings["textSize"]>
+            label="Text size"
+            value={display.textSize}
+            onChange={(textSize) => updateDisplay({ textSize })}
+            options={[
+              { value: "small", label: "Small" },
+              { value: "default", label: "Default" },
+              { value: "large", label: "Large" },
+            ]}
+          />
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={display.reduceMotion}
+              onChange={(e) =>
+                updateDisplay({ reduceMotion: e.target.checked })
+              }
+              className="mt-1"
+            />
+            <span>
+              <span className="font-medium">Reduce motion</span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Disable transitions and animations.
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A small color-strip preview of a palette for the preset tiles. */
+function PresetSwatch({ palette }: { palette: ThemePalette }) {
+  return (
+    <span
+      className="flex h-10 overflow-hidden rounded-md border border-divider"
+      style={{ backgroundColor: palette.chat }}
+    >
+      <span className="w-1/4" style={{ backgroundColor: palette.grad1 }} />
+      <span className="w-1/4" style={{ backgroundColor: palette.grad3 }} />
+      <span className="flex-1" style={{ backgroundColor: palette.chat }} />
+      <span className="w-1/4" style={{ backgroundColor: palette.accent }} />
+    </span>
+  );
+}
+
+/** A segmented (radio-style) control for a small set of options. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-ink">{label}</span>
+      <div className="inline-flex w-fit rounded-lg border border-divider bg-rail p-0.5">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`rounded-md px-3 py-1.5 text-sm transition ${
+              value === option.value
+                ? "bg-accent font-medium text-white"
+                : "text-muted hover:text-ink"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

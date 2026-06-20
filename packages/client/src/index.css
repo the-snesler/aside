@@ -35,6 +35,36 @@
     height: 100%;
   }
 
+  /*
+   * Per-device display preferences (see appearance.ts). Density drives message
+   * spacing through these vars; text size scales rem-based utilities by setting
+   * the root font size; reduced motion strips transitions/animations. The
+   * attributes are written onto <html> at runtime.
+   */
+  :root {
+    --msg-pad-y: 0.5rem;
+    --msg-gap: 0.25rem;
+  }
+  :root[data-density="compact"] {
+    --msg-pad-y: 0.1875rem;
+    --msg-gap: 0.125rem;
+  }
+
+  :root[data-text-size="small"] {
+    font-size: 14px;
+  }
+  :root[data-text-size="large"] {
+    font-size: 18px;
+  }
+
+  :root[data-reduce-motion="true"] *,
+  :root[data-reduce-motion="true"] *::before,
+  :root[data-reduce-motion="true"] *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+
   body {
     margin: 0;
     /* Pink (top-left) → blue (bottom-left) → lavender (right). Fixed so the
