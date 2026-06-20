@@ -11,26 +11,33 @@ import {
 import {
   createEditor,
   Editor,
-  Node,
   Range,
   Text,
   Transforms,
-  type BaseEditor,
-  type Descendant,
   type NodeEntry,
   type Path,
 } from "slate";
+import { channelColor } from "../channels/channelColor";
 import { matchChannelMention } from "../channels/channelName";
+import {
+  continueList,
+  slateToString,
+  stringToSlate,
+  type MentionElement,
+} from "./composerMarkdown";
 import {
   ChannelMentionDropdown,
   type MentionChannel,
 } from "./ChannelMentionDropdown";
-import { withHistory, type HistoryEditor } from "slate-history";
+import { withHistory } from "slate-history";
 import {
   Editable,
   ReactEditor,
   Slate,
+  useFocused,
+  useSelected,
   withReact,
+  type RenderElementProps,
   type RenderLeafProps,
   type RenderPlaceholderProps,
 } from "slate-react";
@@ -40,41 +47,46 @@ import {
 // leaves, so `**bold**` reads bold with dimmed `**`, headings grow, etc.
 // The styling hints mirror the actual renderer (remark-gfm), not Discord's
 // dialect — `__x__` is bold, `~~x~~` is strikethrough. The document contract
-// stays a plain Markdown string; Slate is only the editing surface.
+// stays a plain Markdown string; Slate is only the editing surface. The one
+// structural element is a `#channel` mention (CH-4): an atomic inline void node
+// that serializes back to `#name` text. Types + string ⇆ Slate serialization
+// live in ./composerMarkdown.
 
-type ParagraphElement = { type: "paragraph"; children: FormattedText[] };
-type FormattedText = {
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-  strike?: boolean;
-  code?: boolean;
-  title?: boolean;
-  url?: boolean;
-  blockquote?: boolean;
-  list?: boolean;
-  punctuation?: boolean;
-};
-
-declare module "slate" {
-  interface CustomTypes {
-    Editor: BaseEditor & ReactEditor & HistoryEditor;
-    Element: ParagraphElement;
-    Text: FormattedText;
-  }
+/** Treat `mention` nodes as atomic inline voids (the Slate mentions example). */
+function withMentions<T extends Editor>(editor: T): T {
+  const { isInline, isVoid, markableVoid } = editor;
+  editor.isInline = (element) =>
+    element.type === "mention" ? true : isInline(element);
+  editor.isVoid = (element) =>
+    element.type === "mention" ? true : isVoid(element);
+  editor.markableVoid = (element) =>
+    element.type === "mention" ? true : markableVoid(element);
+  return editor;
 }
 
-/** A Markdown string ⇆ Slate value: one paragraph per line. */
-function stringToSlate(text: string): Descendant[] {
-  const lines = text.length ? text.split("\n") : [""];
-  return lines.map((line) => ({
-    type: "paragraph",
-    children: [{ text: line }],
-  }));
-}
-
-function slateToString(nodes: Descendant[]): string {
-  return nodes.map((n) => Node.string(n)).join("\n");
+/** A `#channel` chip: an atomic, non-editable pill the caret skips/deletes whole. */
+function MentionChip({ attributes, children, element }: RenderElementProps) {
+  const selected = useSelected();
+  const focused = useFocused();
+  const { channel } = element as MentionElement;
+  return (
+    <span
+      {...attributes}
+      contentEditable={false}
+      className={`mx-px inline-flex select-none items-center gap-1 rounded-md bg-active px-1.5 py-px align-baseline text-[0.95em] ${selected && focused ? "ring-1 ring-accent" : ""
+        }`}
+    >
+      <span
+        className="h-2 w-2 shrink-0 rounded-[3px]"
+        style={{ backgroundColor: channelColor(channel) }}
+      />
+      <span>
+        <span className="text-muted">#</span>
+        {channel}
+      </span>
+      {children}
+    </span>
+  );
 }
 
 /** Visible length of a Prism token, summing any nested content. */
@@ -128,6 +140,7 @@ function Leaf({ attributes, children, leaf }: RenderLeafProps) {
   if (leaf.url) classes.push("text-accent", "underline");
   if (leaf.blockquote) classes.push("text-muted", "italic");
   if (leaf.list) classes.push("text-muted");
+  if (leaf.mention) classes.push("composer-md-mention");
   if (leaf.punctuation) classes.push("text-muted");
   return (
     <span {...attributes} className={classes.join(" ")}>
@@ -191,19 +204,49 @@ export const MarkdownEditor = forwardRef<
   },
   ref,
 ) {
-  const editor = useMemo(() => withHistory(withReact(createEditor())), []);
+  const editor = useMemo(
+    () => withMentions(withHistory(withReact(createEditor()))),
+    [],
+  );
   // Read once: Slate owns the value after mount. Callers reset by remounting
   // (a changed `key`), so this never needs to track later prop changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initial = useMemo(() => stringToSlate(initialValue), []);
 
-  const decorate = useCallback(([node, path]: NodeEntry): Range[] => {
-    const ranges: Range[] = [];
-    if (!Text.isText(node)) return ranges;
-    const tokens = Prism.tokenize(node.text, Prism.languages.markdown);
-    collectRanges(tokens, path, 0, ranges);
-    return ranges;
+  // A derived Markdown grammar: a `#tag` chip token (highest precedence) plus an
+  // ATX-heading fix so a bare `#tag` never styles as a heading — CommonMark wants
+  // a space after the hashes, but Prism's default `#.+` doesn't. The mention
+  // token only styles raw `#tag` text mid-type; confirmed mentions are void
+  // nodes (rendered by MentionChip), not text. Built once.
+  const grammar = useMemo<Prism.Grammar>(() => {
+    const base = Prism.languages.markdown as Record<string, Prism.GrammarValue>;
+    const title = base.title;
+    const fixedTitle = Array.isArray(title)
+      ? title.map((rule) =>
+        rule instanceof RegExp ||
+          !rule.pattern ||
+          !rule.pattern.source.includes("#")
+          ? rule
+          : { ...rule, pattern: /(^\s*)#{1,6}[ \t].+/m },
+      )
+      : title;
+    return {
+      mention: { pattern: /(^|\s)#[a-z0-9-]+/, lookbehind: true },
+      ...base,
+      title: fixedTitle,
+    };
   }, []);
+
+  const decorate = useCallback(
+    ([node, path]: NodeEntry): Range[] => {
+      const ranges: Range[] = [];
+      if (!Text.isText(node)) return ranges;
+      const tokens = Prism.tokenize(node.text, grammar);
+      collectRanges(tokens, path, 0, ranges);
+      return ranges;
+    },
+    [grammar],
+  );
 
   // CH-4: channel `#tag` autocomplete. `mention` is the in-progress `#partial`
   // token (its Slate range + query); recomputed on every selection change.
@@ -292,8 +335,17 @@ export const MarkdownEditor = forwardRef<
   const selectMention = useCallback(
     (name: string) => {
       if (!mention) return;
+      // Replace the typed `#partial` with an atomic mention node. Selecting an
+      // expanded range makes insertNodes delete it first, then `move` steps the
+      // caret past the void so the trailing space lands after the chip.
       Transforms.select(editor, mention.target);
-      Transforms.insertText(editor, `#${name} `);
+      Transforms.insertNodes(editor, {
+        type: "mention",
+        channel: name,
+        children: [{ text: "" }],
+      });
+      Transforms.move(editor);
+      Transforms.insertText(editor, " ");
       setMention(null);
       ReactEditor.focus(editor);
     },
@@ -304,6 +356,36 @@ export const MarkdownEditor = forwardRef<
     (props: RenderLeafProps) => <Leaf {...props} />,
     [],
   );
+
+  const renderElement = useCallback((props: RenderElementProps) => {
+    if (props.element.type === "mention") return <MentionChip {...props} />;
+    return <p {...props.attributes}>{props.children}</p>;
+  }, []);
+
+  // List/checklist continuation (MD-2): on an inserted break, repeat the current
+  // line's list marker (numbered markers increment; tasks continue unchecked),
+  // or clear an empty item to exit the list. Plain lines just break.
+  const handleBreak = useCallback(() => {
+    const { selection } = editor;
+    if (!selection || !Range.isCollapsed(selection)) {
+      editor.insertBreak();
+      return;
+    }
+    const block = Range.edges(selection)[0].path.slice(0, 1);
+    const start = Editor.start(editor, block);
+    const end = Editor.end(editor, block);
+    const cont = continueList(
+      Editor.string(editor, { anchor: start, focus: end }),
+    );
+    if (cont?.kind === "continue") {
+      editor.insertBreak();
+      editor.insertText(cont.prefix);
+    } else if (cont?.kind === "exit") {
+      Transforms.delete(editor, { at: { anchor: start, focus: end } });
+    } else {
+      editor.insertBreak();
+    }
+  }, [editor]);
 
   const renderPlaceholder = useCallback(
     ({ children, attributes }: RenderPlaceholderProps) => (
@@ -353,11 +435,11 @@ export const MarkdownEditor = forwardRef<
         if (submitOnEnter) {
           onSubmit(slateToString(editor.children));
         } else {
-          editor.insertBreak();
+          handleBreak();
         }
       } else if (event.key === "Enter" && event.shiftKey) {
         event.preventDefault();
-        editor.insertBreak();
+        handleBreak();
       } else if (event.key === "Escape") {
         event.preventDefault();
         onCancel?.();
@@ -372,6 +454,7 @@ export const MarkdownEditor = forwardRef<
       matches,
       mentionIndex,
       selectMention,
+      handleBreak,
     ],
   );
 
@@ -434,6 +517,7 @@ export const MarkdownEditor = forwardRef<
       <Editable
         className={className}
         decorate={decorate}
+        renderElement={renderElement}
         renderLeaf={renderLeaf}
         renderPlaceholder={renderPlaceholder}
         onKeyDown={onKeyDown}

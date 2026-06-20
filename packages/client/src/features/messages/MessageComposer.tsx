@@ -96,7 +96,7 @@ export function MessageComposer({
             submitOnEnter={!isTouch}
             onSubmit={(t) => onSend(t)}
             onAddFiles={onAddFiles}
-            className="max-h-[40vh] w-full overflow-y-auto bg-transparent py-1.5 text-ink outline-none"
+            className="max-h-[40vh] w-full overflow-y-auto bg-transparent text-ink outline-none"
           />
         </div>
         <button

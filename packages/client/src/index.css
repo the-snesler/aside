@@ -280,6 +280,12 @@
     font-weight: 600;
     font-size: 1.15rem;
   }
+  /* A `#tag` mention while still raw text (pre-chip): accent it instead of
+   * letting it read as a heading. Confirmed mentions render as MentionChip. */
+  .composer-md-mention {
+    color: var(--color-accent);
+    font-weight: 500;
+  }
   .composer-md-code {
     /* The editor box is bg-rail, so use a lighter shade for the code chip. */
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
