@@ -49,7 +49,10 @@ export function MessageRow({
   onStartEdit: (doc: RxDocument<MessageDoc>) => void;
   onCancelEdit: () => void;
   onSaveEdit: (doc: RxDocument<MessageDoc>, raw: string) => Promise<void>;
-  onToggleTask: (doc: RxDocument<MessageDoc>, nextText: string) => Promise<void>;
+  onToggleTask: (
+    doc: RxDocument<MessageDoc>,
+    nextText: string,
+  ) => Promise<void>;
   onCopy: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onDelete: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onToggleChannelPicker: (doc: RxDocument<MessageDoc>) => void;
@@ -103,14 +106,14 @@ export function MessageRow({
         e.dataTransfer.setData("application/x-aside-message-id", doc.id);
         e.dataTransfer.effectAllowed = "copy";
       }}
-      className={`group w-full relative flex gap-3 rounded-xl px-2 py-2 transition-all hover:bg-hover md:px-3 ${
+      className={`group w-full relative flex gap-3 rounded-xl px-2 py-[var(--msg-pad-y)] transition-all hover:bg-hover md:px-3 ${
         highlighted ? "bg-active ring-2 ring-accent/60" : ""
       }`}
     >
       <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
         {formatTime(doc.createdAt)}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-[var(--msg-gap)]">
         {smartView && (
           <span className="w-fit rounded-md bg-hover px-2 py-0.5 text-[11px] font-medium text-muted">
             <span className="opacity-60">#</span> {channelLabel || "unknown"}
