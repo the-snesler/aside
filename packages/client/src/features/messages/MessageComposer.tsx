@@ -5,6 +5,7 @@ import IconPaperclip from "~icons/lucide/paperclip";
 import IconX from "~icons/lucide/x";
 import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 import type { PendingAttachment } from "./types";
+import { useIsTouch } from "./useIsTouch";
 
 interface Props {
   pending: PendingAttachment[];
@@ -29,8 +30,9 @@ export function MessageComposer({
   onRemovePending,
   onSend,
 }: Props) {
+  const isTouch = useIsTouch();
   return (
-    <div className="shrink-0 px-4 pb-4 pt-1 md:px-6">
+    <div className="shrink-0 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pb-4">
       {pending.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {pending.map((item) => (
@@ -91,6 +93,7 @@ export function MessageComposer({
             autoFocus
             placeholder={placeholder}
             channels={channels}
+            submitOnEnter={!isTouch}
             onSubmit={(t) => onSend(t)}
             onAddFiles={onAddFiles}
             className="max-h-[40vh] w-full overflow-y-auto bg-transparent py-1.5 text-ink outline-none"

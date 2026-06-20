@@ -5,6 +5,7 @@ import type {
   MessageDoc,
 } from "@aside/shared";
 import type { RxDocument } from "rxdb";
+import { useRef } from "react";
 import IconCopy from "~icons/lucide/copy";
 import IconPencil from "~icons/lucide/pencil";
 import IconTags from "~icons/lucide/tags";
@@ -15,8 +16,9 @@ import { useLightbox, type LightboxImage } from "../lightbox/LightboxProvider";
 import { AttachmentCards } from "./AttachmentCards";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { Markdown } from "./Markdown";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 import { formatTime } from "./timeline";
+import { useIsTouch } from "./useIsTouch";
 
 export function MessageRow({
   doc,
@@ -36,6 +38,7 @@ export function MessageRow({
   onDelete,
   onToggleChannelPicker,
   onToggleChannel,
+  onLongPress,
 }: {
   doc: RxDocument<MessageDoc>;
   smartView: boolean;
@@ -60,8 +63,23 @@ export function MessageRow({
     doc: RxDocument<MessageDoc>,
     channelId: string,
   ) => Promise<void>;
+  onLongPress: (doc: RxDocument<MessageDoc>) => void;
 }) {
   const lightbox = useLightbox();
+  const isTouch = useIsTouch();
+  const editorRef = useRef<MarkdownEditorHandle>(null);
+  // Long-press → action sheet on touch. A timer started on pointer-down fires
+  // unless the finger moves (a scroll) or lifts first.
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+
+  function clearPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  }
   const channelIds = messageChannelIds(doc);
   const channelLabel = channelIds
     .map((channelId) => channelNames.get(channelId))
@@ -106,6 +124,23 @@ export function MessageRow({
         e.dataTransfer.setData("application/x-aside-message-id", doc.id);
         e.dataTransfer.effectAllowed = "copy";
       }}
+      onPointerDown={(e) => {
+        if (!isTouch || isEditing || e.pointerType === "mouse") return;
+        pressStart.current = { x: e.clientX, y: e.clientY };
+        pressTimer.current = setTimeout(() => onLongPress(doc), 450);
+      }}
+      onPointerMove={(e) => {
+        const start = pressStart.current;
+        if (!start) return;
+        if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10)
+          clearPress();
+      }}
+      onPointerUp={clearPress}
+      onPointerCancel={clearPress}
+      onContextMenu={(e) => {
+        // Suppress the OS long-press/right-click menu so ours shows instead.
+        if (isTouch) e.preventDefault();
+      }}
       className={`group w-full relative flex gap-3 rounded-xl px-2 py-[var(--msg-pad-y)] transition-all hover:bg-hover md:px-3 ${
         highlighted ? "bg-active ring-2 ring-accent/60" : ""
       }`}
@@ -123,23 +158,30 @@ export function MessageRow({
           <div className="min-w-0 flex-1">
             <MarkdownEditor
               key={doc.id}
+              ref={editorRef}
               initialValue={doc.text}
               autoFocus
               channels={channels}
+              submitOnEnter={!isTouch}
               onSubmit={(text) => void onSaveEdit(doc, text)}
               onCancel={onCancelEdit}
               className="max-h-[50vh] w-full overflow-y-auto rounded-xl bg-panel px-3 py-2 text-ink outline-none ring-1 ring-accent"
             />
-            <div className="mt-1 text-xs text-muted">
-              escape to{" "}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => editorRef.current?.submit()}
+                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+              >
+                Save
+              </button>
               <button
                 type="button"
                 onClick={onCancelEdit}
-                className="text-accent hover:underline"
+                className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-hover hover:text-ink"
               >
-                cancel
-              </button>{" "}
-              • enter to save • shift+enter for newline
+                Cancel
+              </button>
             </div>
           </div>
         ) : (

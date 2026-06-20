@@ -156,6 +156,12 @@ interface MarkdownEditorProps {
    * opens a dropdown of matching channels; omit it to keep the editor plain.
    */
   channels?: MentionChannel[];
+  /**
+   * Whether a bare Enter submits (default `true`). Set `false` on touch devices,
+   * where there's no Shift key to insert a newline: Enter then inserts a break
+   * and submission goes through an explicit button instead.
+   */
+  submitOnEnter?: boolean;
   /** Box chrome (background, rounding, padding, focus ring). */
   className?: string;
 }
@@ -180,6 +186,7 @@ export const MarkdownEditor = forwardRef<
     onCancel,
     onAddFiles,
     channels,
+    submitOnEnter = true,
     className,
   },
   ref,
@@ -341,7 +348,13 @@ export const MarkdownEditor = forwardRef<
       }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        onSubmit(slateToString(editor.children));
+        // On touch (submitOnEnter=false) there's no Shift key, so a bare Enter
+        // inserts a newline and sending happens via an explicit button.
+        if (submitOnEnter) {
+          onSubmit(slateToString(editor.children));
+        } else {
+          editor.insertBreak();
+        }
       } else if (event.key === "Enter" && event.shiftKey) {
         event.preventDefault();
         editor.insertBreak();
@@ -354,6 +367,7 @@ export const MarkdownEditor = forwardRef<
       editor,
       onSubmit,
       onCancel,
+      submitOnEnter,
       mentionOpen,
       matches,
       mentionIndex,

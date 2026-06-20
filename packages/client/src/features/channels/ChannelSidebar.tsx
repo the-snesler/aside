@@ -155,7 +155,7 @@ export function ChannelSidebar({
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-2">
+      <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-2">
         <ul className="flex flex-col gap-0.5">
           {smartNav.map(({ id, label, Icon, count }) => {
             const active = selectedView === id;

@@ -8,6 +8,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { RxDocument } from "rxdb";
+import IconCopy from "~icons/lucide/copy";
+import IconPencil from "~icons/lucide/pencil";
+import IconTags from "~icons/lucide/tags";
+import IconTrash from "~icons/lucide/trash-2";
 import type {
   AttachmentCollection,
   ChannelCollection,
@@ -23,6 +27,7 @@ import {
 } from "../channels/membership";
 import { isSmartView, matchesView, type NoteCounts } from "../views";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
+import { MessageActionSheet } from "./MessageActionSheet";
 import { MessageComposer } from "./MessageComposer";
 import { headerMeta, MessageListHeader } from "./MessageListHeader";
 import { MessageRow } from "./MessageRow";
@@ -88,6 +93,8 @@ export function MessageList({
   // EDIT-1: which row is open for editing.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [channelPickerId, setChannelPickerId] = useState<string | null>(null);
+  // Message targeted by a mobile long-press; drives the bottom action sheet.
+  const [actionSheetId, setActionSheetId] = useState<string | null>(null);
 
   const composerRef = useRef<MarkdownEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -508,7 +515,7 @@ export function MessageList({
             increaseViewportBy={600}
             computeItemKey={(_index, row) => row.key}
             components={listComponents}
-            className="h-full"
+            className="h-full overscroll-contain"
             itemContent={(_index, row) =>
               row.type === "day" ? (
                 <div className="flex items-center gap-3 pb-1 pt-4 px-4">
@@ -538,6 +545,7 @@ export function MessageList({
                     setChannelPickerId((id) => (id === doc.id ? null : doc.id))
                   }
                   onToggleChannel={toggleMessageChannel}
+                  onLongPress={(doc) => setActionSheetId(doc.id)}
                 />
               )
             }
@@ -556,6 +564,40 @@ export function MessageList({
         onRemovePending={removePending}
         onSend={(text) => void handleSend(text)}
       />
+
+      {actionSheetId &&
+        (() => {
+          const target = docs.find((d) => d.id === actionSheetId);
+          if (!target) return null;
+          return (
+            <MessageActionSheet
+              onClose={() => setActionSheetId(null)}
+              actions={[
+                {
+                  label: "Edit spaces",
+                  Icon: IconTags,
+                  onSelect: () => setChannelPickerId(target.id),
+                },
+                {
+                  label: "Edit",
+                  Icon: IconPencil,
+                  onSelect: () => startEdit(target),
+                },
+                {
+                  label: "Copy",
+                  Icon: IconCopy,
+                  onSelect: () => void copyMessage(target),
+                },
+                {
+                  label: "Delete",
+                  Icon: IconTrash,
+                  danger: true,
+                  onSelect: () => void deleteMessage(target),
+                },
+              ]}
+            />
+          );
+        })()}
     </main>
   );
 }

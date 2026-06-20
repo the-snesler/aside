@@ -34,7 +34,15 @@
   #root {
     height: 100%;
   }
-
+  
+  /* Stop the page itself from rubber-banding on iOS so the app feels native;
+   inner scrollers (message list, sidebar) opt into `overscroll-contain` so
+   their bounce doesn't chain up to the document. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+  
   /*
    * Per-device display preferences (see appearance.ts). Density drives message
    * spacing through these vars; text size scales rem-based utilities by setting
@@ -64,6 +72,7 @@
     animation: none !important;
     scroll-behavior: auto !important;
   }
+ 
 
   body {
     margin: 0;
