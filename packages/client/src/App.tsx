@@ -25,6 +25,7 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { useRoutedView } from "./features/routing";
 import { SETTINGS_ID, isSmartView, useNoteCounts } from "./features/views";
 import { useTheme } from "./theme";
+import { useDisplay } from "./appearance";
 
 type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
 
@@ -151,6 +152,8 @@ function AuthedApp({ onLogout }: { onLogout: () => void }) {
 
   // Apply the synced theme as soon as the config collection exists; no-op until then.
   useTheme(db?.config ?? null);
+  // Apply per-device display prefs (density, text size, motion) from localStorage.
+  useDisplay();
 
   if (!db) {
     return (
