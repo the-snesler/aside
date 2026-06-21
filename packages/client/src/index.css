@@ -152,12 +152,14 @@
   .message-md li {
     margin: 0.1rem 0;
   }
-  /* GFM task lists: drop the bullet, keep the checkbox aligned. */
+  /* GFM task lists: drop the bullet and tuck the checkbox into the bullet
+     gutter. Pulling the checkbox (rather than the <li>) leftward keeps the
+     <li> at its natural position, so nested task lists keep their indent. */
   .message-md li:has(> input[type="checkbox"]) {
     list-style: none;
-    margin-left: -1.25rem;
   }
-  .message-md input[type="checkbox"] {
+  .message-md li > input[type="checkbox"] {
+    margin-left: -1.25rem;
     margin-right: 0.4rem;
   }
 
