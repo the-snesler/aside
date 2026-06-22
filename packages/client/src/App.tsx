@@ -14,6 +14,7 @@ import {
 import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
+import { ChannelSettingsPage } from "./features/channels/ChannelSettingsPage";
 import { addMessageChannel } from "./features/channels/membership";
 import { listFeeds, type Feed } from "./features/feeds/api";
 import { useFeedUnread } from "./features/feeds/unread";
@@ -184,6 +185,9 @@ function Workspace({
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [channelSettingsId, setChannelSettingsId] = useState<string | null>(
+    null,
+  );
   const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
   const { unreadChannelIds, markChannelRead } = useFeedUnread(
     db.messages,
@@ -240,6 +244,7 @@ function Workspace({
   const cardRadius = Math.round((sidebarOffset / SIDEBAR_WIDTH) * 28);
 
   function selectView(nextView: string) {
+    setChannelSettingsId(null);
     if (nextView !== view && !isSmartView(nextView)) {
       void markChannelRead(nextView);
     }
@@ -290,6 +295,10 @@ function Workspace({
           selectedView={view}
           onSelect={selectView}
           onOpenSettings={() => selectView(SETTINGS_ID)}
+          onOpenChannelSettings={(channelId) => {
+            setChannelSettingsId(channelId);
+            setSidebarOpen(false);
+          }}
           onOpenSearch={() => setPaletteOpen(true)}
           onLogout={onLogout}
           onDropMessage={handleDropMessage}
@@ -308,7 +317,17 @@ function Workspace({
             } as React.CSSProperties
           }
         >
-          {view === SETTINGS_ID ? (
+          {channelSettingsId ? (
+            <ChannelSettingsPage
+              channels={db.channels}
+              channelId={channelSettingsId}
+              onOpenMenu={() => setSidebarOpen(true)}
+              onClose={(nextView) => {
+                setChannelSettingsId(null);
+                if (nextView) selectView(nextView);
+              }}
+            />
+          ) : view === SETTINGS_ID ? (
             <SettingsPage
               channels={db.channels}
               config={db.config}

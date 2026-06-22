@@ -9,7 +9,6 @@ import IconPlus from "~icons/lucide/plus";
 import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
 import IconSparkles from "~icons/lucide/sparkles";
-import IconTrash from "~icons/lucide/trash-2";
 import type { ChannelCollection } from "../../db/database";
 import {
   ALL_ID,
@@ -18,12 +17,13 @@ import {
   TODAY_ID,
   type NoteCounts,
 } from "../views";
-import { channelColor } from "./channelColor";
+import { channelColor, nextSortOrder, sortChannels } from "./channelMeta";
 import { slugifyChannelName } from "./channelName";
 
 // Dropping a note onto a channel button files it there; MessageRow stamps the
 // dragged note's id onto the dataTransfer under this MIME type.
 const MESSAGE_DRAG_TYPE = "application/x-aside-message-id";
+const CHANNEL_DRAG_TYPE = "application/x-aside-channel-id";
 
 interface Props {
   collection: ChannelCollection;
@@ -32,6 +32,7 @@ interface Props {
   selectedView: string;
   onSelect: (view: string) => void;
   onOpenSettings: () => void;
+  onOpenChannelSettings: (channelId: string) => void;
   onOpenSearch: () => void;
   onLogout: () => void;
   onDropMessage: (channelId: string, messageId: string) => void;
@@ -44,6 +45,7 @@ export function ChannelSidebar({
   selectedView,
   onSelect,
   onOpenSettings,
+  onOpenChannelSettings,
   onOpenSearch,
   onLogout,
   onDropMessage,
@@ -55,16 +57,11 @@ export function ChannelSidebar({
   const [draftName, setDraftName] = useState("");
   // Channel currently under a dragged note, for the drop-target highlight.
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dragChannelId, setDragChannelId] = useState<string | null>(null);
 
   useEffect(() => {
     const sub = collection.find().$.subscribe((found) => {
-      // Default channel pinned to the top, then oldest-created first.
-      const sorted = [...found].sort((a, b) => {
-        if (a.id === DEFAULT_CHANNEL_ID) return -1;
-        if (b.id === DEFAULT_CHANNEL_ID) return 1;
-        return a.createdAt - b.createdAt;
-      });
-      setChannels(sorted);
+      setChannels(sortChannels([...found]));
     });
     return () => sub.unsubscribe();
   }, [collection]);
@@ -84,6 +81,7 @@ export function ChannelSidebar({
     const doc = await collection.insert({
       id: crypto.randomUUID(),
       name,
+      sortOrder: nextSortOrder(channels),
       createdAt: now,
       updatedAt: now,
     });
@@ -97,20 +95,31 @@ export function ChannelSidebar({
     await doc.incrementalPatch({ name, updatedAt: Date.now() });
   }
 
-  async function deleteChannel(doc: RxDocument<ChannelDoc>) {
-    // Bump-then-remove: incrementalPatch returns the doc at its new revision;
-    // remove() must run on that, not the stale reference, or RxDB throws CONFLICT.
-    const bumped = await doc.incrementalPatch({ updatedAt: Date.now() });
-    await bumped.remove();
-    if (selectedView === doc.id) onSelect(ALL_ID);
-  }
-
   const smartNav = [
     { id: ALL_ID, label: "All Notes", Icon: IconList, count: counts.all },
     { id: TODAY_ID, label: "Today", Icon: IconSparkles, count: counts.today },
     { id: LINKS_ID, label: "Links", Icon: IconLink, count: counts.links },
     { id: PHOTOS_ID, label: "Photos", Icon: IconImage, count: counts.photos },
   ];
+
+  async function moveChannel(beforeId: string, afterId: string) {
+    if (beforeId === afterId) return;
+    const from = channels.findIndex((channel) => channel.id === beforeId);
+    const to = channels.findIndex((channel) => channel.id === afterId);
+    if (from === -1 || to === -1) return;
+    const ordered = [...channels];
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    setChannels(ordered);
+    const now = Date.now();
+    await Promise.all(
+      ordered.map((channel, index) => {
+        const sortOrder = index + 1;
+        if (channel.sortOrder === sortOrder) return Promise.resolve();
+        return channel.incrementalPatch({ sortOrder, updatedAt: now });
+      }),
+    );
+  }
 
   return (
     <aside className="absolute inset-y-0 left-0 z-0 flex h-full min-h-0 w-[280px] shrink-0 flex-col overflow-hidden pr-3 md:relative md:w-[268px] md:pr-5">
@@ -165,8 +174,8 @@ export function ChannelSidebar({
                   type="button"
                   onClick={() => onSelect(id)}
                   className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? "bg-active text-ink shadow-sm"
-                    : "text-ink/80 hover:bg-hover"
+                      ? "bg-active text-ink shadow-sm"
+                      : "text-ink/80 hover:bg-hover"
                     }`}
                 >
                   <Icon
@@ -209,25 +218,45 @@ export function ChannelSidebar({
                   />
                 ) : (
                   <div
-                    className={`group relative rounded-xl ${dropTargetId === doc.id ? "ring-2 ring-accent" : ""
+                    draggable
+                    className={`group relative rounded-xl ${dropTargetId === doc.id || dragChannelId === doc.id
+                        ? "ring-2 ring-accent"
+                        : ""
                       }`}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(CHANNEL_DRAG_TYPE, doc.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDragChannelId(doc.id);
+                    }}
+                    onDragEnd={() => setDragChannelId(null)}
                     onDragOver={(e) => {
-                      if (!e.dataTransfer.types.includes(MESSAGE_DRAG_TYPE))
+                      if (
+                        !e.dataTransfer.types.includes(MESSAGE_DRAG_TYPE) &&
+                        !e.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)
+                      )
                         return;
                       e.preventDefault();
-                      e.dataTransfer.dropEffect = "copy";
+                      e.dataTransfer.dropEffect = e.dataTransfer.types.includes(
+                        CHANNEL_DRAG_TYPE,
+                      )
+                        ? "move"
+                        : "copy";
                       setDropTargetId(doc.id);
                     }}
                     onDragLeave={() =>
                       setDropTargetId((id) => (id === doc.id ? null : id))
                     }
                     onDrop={(e) => {
+                      const channelId =
+                        e.dataTransfer.getData(CHANNEL_DRAG_TYPE);
                       const messageId =
                         e.dataTransfer.getData(MESSAGE_DRAG_TYPE);
                       setDropTargetId(null);
-                      if (!messageId) return;
+                      setDragChannelId(null);
+                      if (!channelId && !messageId) return;
                       e.preventDefault();
-                      onDropMessage(doc.id, messageId);
+                      if (channelId) void moveChannel(channelId, doc.id);
+                      else onDropMessage(doc.id, messageId);
                     }}
                   >
                     <button
@@ -238,8 +267,8 @@ export function ChannelSidebar({
                         setEditDraft(doc.name);
                       }}
                       className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${active
-                        ? "bg-active text-ink shadow-sm"
-                        : "hover:bg-hover"
+                          ? "bg-active text-ink shadow-sm"
+                          : "hover:bg-hover"
                         }`}
                       title={
                         doc.description ||
@@ -248,33 +277,31 @@ export function ChannelSidebar({
                     >
                       <span
                         className="h-3.5 w-3.5 shrink-0 rounded-[5px]"
-                        style={{ backgroundColor: channelColor(doc.name) }}
+                        style={{ backgroundColor: channelColor(doc) }}
                       />
                       <span className="min-w-0 flex-1 truncate text-sm text-ink/90">
                         <span className="text-muted">#</span> {doc.name}
                       </span>
                       <span
-                        className={`shrink-0 text-xs tabular-nums ${active ? "text-accent" : "text-muted"} ${doc.id !== DEFAULT_CHANNEL_ID ? "group-hover:opacity-0" : ""}`}
+                        className={`shrink-0 text-xs tabular-nums ${active ? "text-accent" : "text-muted"} group-hover:opacity-0`}
                       >
                         {count}
                       </span>
                       {unread && (
                         <span
                           title="New feed items"
-                          className="h-2 w-2 shrink-0 rounded-full bg-accent"
+                          className="h-2 w-2 shrink-0 rounded-full bg-accent group-hover:opacity-0"
                         />
                       )}
                     </button>
-                    {doc.id !== DEFAULT_CHANNEL_ID && (
-                      <button
-                        type="button"
-                        onClick={() => void deleteChannel(doc)}
-                        aria-label={`Delete #${doc.name}`}
-                        className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted hover:text-danger group-hover:block"
-                      >
-                        <IconTrash className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onOpenChannelSettings(doc.id)}
+                      aria-label={`Settings for #${doc.name}`}
+                      className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted hover:text-ink group-hover:block"
+                    >
+                      <IconSettings className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 )}
               </li>

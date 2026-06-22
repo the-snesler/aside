@@ -1,4 +1,5 @@
-import { DEFAULT_CHANNEL_ID, type ChannelDoc } from "@aside/shared";
+import type { ChannelDoc } from "@aside/shared";
+import { sortChannels } from "../channels/channelMeta";
 import { slugifyChannelName } from "../channels/channelName";
 
 export interface FeedChannelTarget {
@@ -19,10 +20,4 @@ export function resolveFeedChannelTarget(
   return existing ? { channelId: existing.id, channelName } : { channelName };
 }
 
-export function sortChannels(channels: ChannelDoc[]): ChannelDoc[] {
-  return [...channels].sort((a, b) => {
-    if (a.id === DEFAULT_CHANNEL_ID) return -1;
-    if (b.id === DEFAULT_CHANNEL_ID) return 1;
-    return a.createdAt - b.createdAt;
-  });
-}
+export { sortChannels };

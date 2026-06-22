@@ -28,6 +28,13 @@ export const channelDocSchema: z.ZodType<ReplicatedChannelDoc> = z.object({
   // Optional + absent (never null), matching the RxDB schema where `description`
   // sits outside `required`.
   description: z.string().max(2000).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  type: z.enum(["standard", "todo"]).optional(),
+  pinnedMessageIds: z.array(z.string().min(1).max(64)).optional(),
+  sortOrder: z.number().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
   _deleted: z.boolean(),

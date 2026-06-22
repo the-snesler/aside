@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { Key, RefObject } from "react";
 import IconArrowUp from "~icons/lucide/arrow-up";
 import IconImage from "~icons/lucide/image";
 import IconPaperclip from "~icons/lucide/paperclip";
@@ -9,7 +9,8 @@ import { useIsTouch } from "./useIsTouch";
 
 interface Props {
   pending: PendingAttachment[];
-  composerKey: number;
+  composerKey: Key;
+  initialValue: string;
   composerRef: RefObject<MarkdownEditorHandle>;
   fileInputRef: RefObject<HTMLInputElement>;
   placeholder: string;
@@ -22,6 +23,7 @@ interface Props {
 export function MessageComposer({
   pending,
   composerKey,
+  initialValue,
   composerRef,
   fileInputRef,
   placeholder,
@@ -89,7 +91,7 @@ export function MessageComposer({
           <MarkdownEditor
             key={composerKey}
             ref={composerRef}
-            initialValue=""
+            initialValue={initialValue}
             autoFocus
             placeholder={placeholder}
             channels={channels}

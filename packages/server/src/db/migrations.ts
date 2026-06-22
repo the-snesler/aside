@@ -38,6 +38,11 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .ifNotExists()
     .addColumn("id", "text", (c) => c.primaryKey())
     .addColumn("name", "text", (c) => c.notNull())
+    .addColumn("description", "text")
+    .addColumn("color", "text")
+    .addColumn("type", "text")
+    .addColumn("pinned_message_ids", "text")
+    .addColumn("sort_order", "integer")
     .addColumn("created_at", "integer", (c) => c.notNull())
     .addColumn("updated_at", "integer", (c) => c.notNull())
     .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
@@ -45,6 +50,7 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .execute();
 
   await ensureChannelDescriptionColumn(db);
+  await ensureChannelSettingsColumns(db);
 
   await db.schema
     .createIndex("channels_seq")
@@ -289,6 +295,33 @@ async function ensureChannelDescriptionColumn(
     await db.schema
       .alterTable("channels")
       .addColumn("description", "text")
+      .execute();
+  }
+}
+
+async function ensureChannelSettingsColumns(
+  db: Kysely<Database>,
+): Promise<void> {
+  const tables = await db.introspection.getTables();
+  const channels = tables.find((table) => table.name === "channels");
+  const columns = new Set(channels?.columns.map((column) => column.name) ?? []);
+
+  if (!columns.has("color")) {
+    await db.schema.alterTable("channels").addColumn("color", "text").execute();
+  }
+  if (!columns.has("type")) {
+    await db.schema.alterTable("channels").addColumn("type", "text").execute();
+  }
+  if (!columns.has("pinned_message_ids")) {
+    await db.schema
+      .alterTable("channels")
+      .addColumn("pinned_message_ids", "text")
+      .execute();
+  }
+  if (!columns.has("sort_order")) {
+    await db.schema
+      .alterTable("channels")
+      .addColumn("sort_order", "integer")
       .execute();
   }
 }

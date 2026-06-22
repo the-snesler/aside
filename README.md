@@ -30,5 +30,4 @@ cd aside
 docker compose up
 ```
 
-Then open `http://localhost:3001`. For local/dev installs, the default UI
-password is `admin`.
+Then open `http://localhost:3001` and set up a new password.

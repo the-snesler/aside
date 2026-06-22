@@ -77,6 +77,10 @@ const channelSample: ReplicatedChannelDoc = {
   id: "channel-1",
   name: "general",
   description: "Catch-all channel for notes that don't fit elsewhere.",
+  color: "#3ba55d",
+  type: "todo",
+  pinnedMessageIds: ["message-1", "message-2"],
+  sortOrder: 10,
   createdAt: 1,
   updatedAt: 2,
   _deleted: false,
@@ -117,10 +121,11 @@ describe("channel contract", () => {
     );
   });
 
-  it("migrates through the v2 description addition", () => {
-    expect(channelSchema.version).toBe(2);
+  it("migrates through the v3 channel settings addition", () => {
+    expect(channelSchema.version).toBe(3);
     expect(channelMigrationStrategies[1](channelSample)).toBe(channelSample);
     expect(channelMigrationStrategies[2](channelSample)).toBe(channelSample);
+    expect(channelMigrationStrategies[3](channelSample)).toBe(channelSample);
   });
 });
 

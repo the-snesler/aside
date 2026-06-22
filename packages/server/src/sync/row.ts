@@ -76,6 +76,11 @@ export function channelRowToDoc(row: ChannelsTable): ReplicatedChannelDoc {
     _deleted: row.deleted === 1,
   };
   if (row.description !== null) doc.description = row.description;
+  if (row.color !== null) doc.color = row.color;
+  if (row.type === "standard" || row.type === "todo") doc.type = row.type;
+  const pinnedMessageIds = parsePinnedMessageIds(row.pinned_message_ids);
+  if (pinnedMessageIds.length > 0) doc.pinnedMessageIds = pinnedMessageIds;
+  if (row.sort_order !== null) doc.sortOrder = row.sort_order;
   return doc;
 }
 
@@ -88,11 +93,34 @@ export function channelDocToRow(
     id: doc.id,
     name: doc.name,
     description: doc.description ?? null,
+    color: doc.color ?? null,
+    type: doc.type ?? null,
+    pinned_message_ids: doc.pinnedMessageIds
+      ? JSON.stringify(doc.pinnedMessageIds)
+      : null,
+    sort_order: doc.sortOrder ?? null,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
     seq,
     deleted: doc._deleted ? 1 : 0,
   };
+}
+
+function parsePinnedMessageIds(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return [
+      ...new Set(
+        parsed.filter(
+          (id): id is string => typeof id === "string" && id.length > 0,
+        ),
+      ),
+    ];
+  } catch {
+    return [];
+  }
 }
 
 /**

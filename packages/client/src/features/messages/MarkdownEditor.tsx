@@ -17,7 +17,7 @@ import {
   type NodeEntry,
   type Path,
 } from "slate";
-import { channelColor } from "../channels/channelColor";
+import { channelColor } from "../channels/channelMeta";
 import { matchChannelMention } from "../channels/channelName";
 import {
   continueList,
@@ -73,8 +73,9 @@ function MentionChip({ attributes, children, element }: RenderElementProps) {
     <span
       {...attributes}
       contentEditable={false}
-      className={`mx-px inline-flex select-none items-center gap-1 rounded-md bg-active px-1.5 py-px align-baseline text-[0.95em] ${selected && focused ? "ring-1 ring-accent" : ""
-        }`}
+      className={`mx-px inline-flex select-none items-center gap-1 rounded-md bg-active px-1.5 py-px align-baseline text-[0.95em] ${
+        selected && focused ? "ring-1 ring-accent" : ""
+      }`}
     >
       <span
         className="h-2 w-2 shrink-0 rounded-[3px]"
@@ -223,12 +224,12 @@ export const MarkdownEditor = forwardRef<
     const title = base.title;
     const fixedTitle = Array.isArray(title)
       ? title.map((rule) =>
-        rule instanceof RegExp ||
+          rule instanceof RegExp ||
           !rule.pattern ||
           !rule.pattern.source.includes("#")
-          ? rule
-          : { ...rule, pattern: /(^\s*)#{1,6}[ \t].+/m },
-      )
+            ? rule
+            : { ...rule, pattern: /(^\s*)#{1,6}[ \t].+/m },
+        )
       : title;
     return {
       mention: { pattern: /(^|\s)#[a-z0-9-]+/, lookbehind: true },

@@ -21,6 +21,14 @@ export interface ChannelsTable {
   name: string;
   /** short channel summary, maintained by the AI describer; null when unset */
   description: string | null;
+  /** user-picked channel accent color (`#rrggbb`); null uses the generated fallback */
+  color: string | null;
+  /** channel behavior; null means standard */
+  type: string | null;
+  /** JSON array of message ids pinned in this channel; null means none */
+  pinned_message_ids: string | null;
+  /** sidebar ordering key; null falls back to created_at */
+  sort_order: number | null;
   created_at: number;
   updated_at: number;
   /** server-owned replication cursor */

@@ -20,6 +20,7 @@ export interface SearchOptions {
 export interface SearchChannel {
   id: string;
   name: string;
+  color?: string;
 }
 
 export interface SearchNote {
@@ -88,7 +89,11 @@ export function useSearchIndex(db: AsideDatabase): {
     () =>
       [...channels]
         .sort((a, b) => a.createdAt - b.createdAt)
-        .map((channel) => ({ id: channel.id, name: channel.name })),
+        .map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+          color: channel.color,
+        })),
     [channels],
   );
 

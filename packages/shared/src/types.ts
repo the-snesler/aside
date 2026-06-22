@@ -41,6 +41,17 @@ export interface ChannelDoc {
    * bot to route messages; also surfaced in the UI.
    */
   description?: string;
+  /** Optional user-picked channel accent color, as `#rrggbb`. */
+  color?: string;
+  /**
+   * Channel behavior. Missing means "standard" so older channels and clients
+   * continue to work; new values can be added as the UI grows.
+   */
+  type?: "standard" | "todo";
+  /** Message ids pinned inside this channel, in display order. */
+  pinnedMessageIds?: string[];
+  /** Sidebar ordering key. Missing channels fall back to createdAt ordering. */
+  sortOrder?: number;
   /** ms epoch */
   createdAt: number;
   /** ms epoch — last-write-time; used by conflict resolution and UI sorting */

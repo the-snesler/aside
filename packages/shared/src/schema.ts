@@ -57,7 +57,7 @@ export const messageMigrationStrategies = {
  */
 export const channelSchema: RxJsonSchema<ChannelDoc> = {
   title: "channel schema",
-  version: 2,
+  version: 3,
   primaryKey: "id",
   type: "object",
   properties: {
@@ -66,6 +66,14 @@ export const channelSchema: RxJsonSchema<ChannelDoc> = {
     // Outside `required` (optional, like the embed OpenGraph fields): a channel
     // with no description omits the field rather than sending an empty/null value.
     description: { type: "string", maxLength: 2000 },
+    color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+    type: { type: "string", enum: ["standard", "todo"] },
+    pinnedMessageIds: {
+      type: "array",
+      uniqueItems: true,
+      items: { type: "string", maxLength: 64 },
+    },
+    sortOrder: { type: "number" },
     createdAt: { type: "number" },
     updatedAt: { type: "number" },
   },
@@ -76,6 +84,8 @@ export const channelMigrationStrategies = {
   1: (doc: ChannelDoc) => doc,
   // v2 adds the optional `description`; old channels just carry it absent.
   2: (doc: ChannelDoc) => doc,
+  // v3 adds optional UI fields; old channels keep falling back in the client.
+  3: (doc: ChannelDoc) => doc,
 };
 
 /**

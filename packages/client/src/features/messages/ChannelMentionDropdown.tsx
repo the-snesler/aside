@@ -1,9 +1,10 @@
 import { createPortal } from "react-dom";
-import { channelColor } from "../channels/channelColor";
+import { channelColor } from "../channels/channelMeta";
 
 export interface MentionChannel {
   id: string;
   name: string;
+  color?: string;
 }
 
 interface Props {
@@ -48,7 +49,7 @@ export function ChannelMentionDropdown({
         >
           <span
             className="h-3 w-3 shrink-0 rounded-[4px]"
-            style={{ backgroundColor: channelColor(channel.name) }}
+            style={{ backgroundColor: channelColor(channel) }}
           />
           <span className="min-w-0 flex-1 truncate text-ink">
             <span className="text-muted">#</span> {channel.name}

@@ -1,8 +1,23 @@
+import type { MessageDoc } from "@aside/shared";
+import {
+  autoUpdate,
+  flip,
+  FloatingPortal,
+  offset,
+  shift,
+  useDismiss,
+  useFloating,
+  useInteractions,
+  useRole,
+} from "@floating-ui/react";
+import { useState } from "react";
+import type { RxDocument } from "rxdb";
 import IconHash from "~icons/lucide/hash";
 import IconImage from "~icons/lucide/image";
 import IconLink from "~icons/lucide/link";
 import IconList from "~icons/lucide/list";
 import IconMenu from "~icons/lucide/menu";
+import IconPin from "~icons/lucide/pin";
 import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
 import IconSparkles from "~icons/lucide/sparkles";
@@ -13,6 +28,7 @@ import {
   TODAY_ID,
   type NoteCounts,
 } from "../views";
+import { formatTime } from "./timeline";
 
 interface HeaderMeta {
   label: string;
@@ -26,10 +42,12 @@ interface Props {
   channelNames: Map<string, string>;
   /** AI-generated summary of the current channel, shown under the title. */
   description?: string | null;
+  pinnedMessages: RxDocument<MessageDoc>[];
   counts: NoteCounts;
   onOpenMenu: () => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
+  onSelectPinnedMessage: (message: RxDocument<MessageDoc>) => void;
 }
 
 export function MessageListHeader({
@@ -37,12 +55,15 @@ export function MessageListHeader({
   smartView,
   channelNames,
   description,
+  pinnedMessages,
   counts,
   onOpenMenu,
   onOpenSettings,
   onOpenSearch,
+  onSelectPinnedMessage,
 }: Props) {
   const meta = headerMeta(view, channelNames, counts);
+  const showPins = !smartView;
 
   return (
     <>
@@ -51,9 +72,16 @@ export function MessageListHeader({
         <div className="flex items-center gap-2.5">
           <meta.Icon className="h-5 w-5 text-accent" />
           <h1 className="text-lg font-semibold text-ink">
-            {smartView ? meta.label : `#${meta.label}`}
+            {smartView ? meta.label : `${meta.label}`}
           </h1>
           <span className="text-sm tabular-nums text-muted">{meta.count}</span>
+          <div className="grow"></div>
+          {showPins && (
+            <PinnedMessagesButton
+              messages={pinnedMessages}
+              onSelect={onSelectPinnedMessage}
+            />
+          )}
         </div>
         {description && (
           <p
@@ -77,7 +105,7 @@ export function MessageListHeader({
             <IconMenu className="h-5 w-5" />
           </button>
           <h1 className="flex-1 text-lg font-semibold text-ink">
-            {smartView ? meta.label : `#${meta.label}`}
+            {smartView ? meta.label : `${meta.label}`}
           </h1>
           <button
             type="button"
@@ -87,6 +115,12 @@ export function MessageListHeader({
           >
             <IconSearch className="h-5 w-5" />
           </button>
+          {showPins && (
+            <PinnedMessagesButton
+              messages={pinnedMessages}
+              onSelect={onSelectPinnedMessage}
+            />
+          )}
           <button
             type="button"
             onClick={onOpenSettings}
@@ -97,6 +131,84 @@ export function MessageListHeader({
           </button>
         </div>
       </div>
+    </>
+  );
+}
+
+function PinnedMessagesButton({
+  messages,
+  onSelect,
+}: {
+  messages: RxDocument<MessageDoc>[];
+  onSelect: (message: RxDocument<MessageDoc>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const floating = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: "bottom-end",
+    whileElementsMounted: autoUpdate,
+    middleware: [offset(8), flip(), shift({ padding: 8 })],
+  });
+  const { getReferenceProps, getFloatingProps } = useInteractions([
+    useDismiss(floating.context),
+    useRole(floating.context, { role: "dialog" }),
+  ]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={floating.refs.setReference}
+        {...getReferenceProps({
+          onClick: () => setOpen((value) => !value),
+        })}
+        aria-label="Pinned messages"
+        title="Pinned messages"
+        className="relative rounded-lg p-1.5 text-muted hover:bg-hover hover:text-ink"
+      >
+        <IconPin className="h-4 w-4" />
+        {messages.length > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-ink" />
+        )}
+      </button>
+      {open && (
+        <FloatingPortal>
+          <div
+            ref={floating.refs.setFloating}
+            style={floating.floatingStyles}
+            {...getFloatingProps()}
+            className="z-40 w-80 max-w-[calc(100vw-2rem)] rounded-xl bg-panel p-2 text-sm shadow-xl ring-1 ring-divider"
+          >
+            {messages.length === 0 ? (
+              <p className="px-2 py-4 text-center text-sm text-muted">
+                No pinned messages.
+              </p>
+            ) : (
+              <div className="max-h-80 overflow-y-auto">
+                {messages.map((message) => (
+                  <button
+                    key={message.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(message);
+                      setOpen(false);
+                    }}
+                    className="flex w-full flex-col gap-1 rounded-lg px-2 py-2 text-left hover:bg-hover"
+                  >
+                    <span className="text-xs tabular-nums text-muted">
+                      {formatTime(message.createdAt)}
+                    </span>
+                    <span className="line-clamp-3 whitespace-pre-wrap text-ink">
+                      {message.text || "Attachment note"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </FloatingPortal>
+      )}
     </>
   );
 }

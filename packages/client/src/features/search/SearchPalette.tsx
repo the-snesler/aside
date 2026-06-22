@@ -11,7 +11,7 @@ import IconCornerDownLeft from "~icons/lucide/corner-down-left";
 import IconHash from "~icons/lucide/hash";
 import IconSearch from "~icons/lucide/search";
 import IconX from "~icons/lucide/x";
-import { channelColor } from "../channels/channelColor";
+import { channelColor } from "../channels/channelMeta";
 import { isSmartView } from "../views";
 import { buildSnippet } from "./highlight";
 import type { SearchChannel, SearchNote, SearchSort } from "./searchIndex";
@@ -278,7 +278,7 @@ function ChannelRow({
     >
       <span
         className="h-3.5 w-3.5 shrink-0 rounded-[5px]"
-        style={{ backgroundColor: channelColor(channel.name) }}
+        style={{ backgroundColor: channelColor(channel) }}
       />
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
         <span className="text-muted">#</span> {channel.name}

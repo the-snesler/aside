@@ -10,6 +10,8 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { RxDocument } from "rxdb";
 import IconCopy from "~icons/lucide/copy";
 import IconPencil from "~icons/lucide/pencil";
+import IconPin from "~icons/lucide/pin";
+import IconPinOff from "~icons/lucide/pin-off";
 import IconTags from "~icons/lucide/tags";
 import IconTrash from "~icons/lucide/trash-2";
 import type {
@@ -20,6 +22,11 @@ import type {
 } from "../../db/database";
 import { uploadBlob } from "../attachments/api";
 import { parseChannelTag, stripChannelTag } from "../channels/channelName";
+import {
+  channelType,
+  pinnedMessageIds,
+  sortChannels,
+} from "../channels/channelMeta";
 import {
   addMessageChannel,
   messageChannelIds,
@@ -93,6 +100,7 @@ export function MessageList({
   // EDIT-1: which row is open for editing.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [channelPickerId, setChannelPickerId] = useState<string | null>(null);
+  const [pinnedDocs, setPinnedDocs] = useState<RxDocument<MessageDoc>[]>([]);
   // Message targeted by a mobile long-press; drives the bottom action sheet.
   const [actionSheetId, setActionSheetId] = useState<string | null>(null);
 
@@ -110,6 +118,9 @@ export function MessageList({
   const [liveAfter, setLiveAfter] = useState<number | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [sentMessageId, setSentMessageId] = useState<string | null>(null);
+  const [pendingPinnedFocusId, setPendingPinnedFocusId] = useState<
+    string | null
+  >(null);
   // Virtuoso is mounted only once the first page has resolved, so its
   // initialTopMostItemIndex sees the real row count and opens at the newest note.
   const [initialLoadDone, setInitialLoadDone] = useState(false);
@@ -119,7 +130,7 @@ export function MessageList({
   useEffect(() => {
     // id → name map for the header and smart-view per-note badges.
     const sub = channels.find().$.subscribe((found) => {
-      setChannelDocs([...found].sort((a, b) => a.createdAt - b.createdAt));
+      setChannelDocs(sortChannels([...found]));
       setChannelNames(new Map(found.map((c) => [c.id, c.name])));
     });
     return () => sub.unsubscribe();
@@ -253,6 +264,23 @@ export function MessageList({
   }, [rows, sentMessageId]);
 
   useEffect(() => {
+    if (!pendingPinnedFocusId) return;
+    const index = rows.findIndex(
+      (row) => row.type === "message" && row.doc.id === pendingPinnedFocusId,
+    );
+    if (index === -1) return;
+    virtuosoRef.current?.scrollToIndex({
+      index,
+      align: "center",
+      behavior: "smooth",
+    });
+    setHighlightedId(pendingPinnedFocusId);
+    const handle = window.setTimeout(() => setHighlightedId(null), 1500);
+    setPendingPinnedFocusId(null);
+    return () => window.clearTimeout(handle);
+  }, [pendingPinnedFocusId, rows]);
+
+  useEffect(() => {
     // Briefly ignore startReached after a view switch so Virtuoso's initial
     // measurement (which can momentarily report the top) doesn't trigger a load.
     setAutoHistoryEnabled(false);
@@ -266,6 +294,46 @@ export function MessageList({
   }, [autoHistoryEnabled, hasMore, loadOlder]);
 
   const meta = headerMeta(view, channelNames, counts);
+  const currentChannel = smartView
+    ? null
+    : (channelDocs.find((channel) => channel.id === view) ?? null);
+  const currentPinnedMessageIds = useMemo(
+    () => (currentChannel ? pinnedMessageIds(currentChannel) : []),
+    [currentChannel?.pinnedMessageIds],
+  );
+  const currentPinnedSet = useMemo(
+    () => new Set(currentPinnedMessageIds),
+    [currentPinnedMessageIds],
+  );
+  const composerInitialValue =
+    currentChannel && channelType(currentChannel) === "todo" ? "- [ ] " : "";
+
+  useEffect(() => {
+    if (currentPinnedMessageIds.length === 0) {
+      setPinnedDocs([]);
+      return;
+    }
+    let cancelled = false;
+    void messages
+      .find({
+        selector: {
+          id: { $in: currentPinnedMessageIds },
+        },
+      })
+      .exec()
+      .then((found) => {
+        if (cancelled) return;
+        const byId = new Map(found.map((doc) => [doc.id, doc]));
+        setPinnedDocs(
+          currentPinnedMessageIds
+            .map((id) => byId.get(id))
+            .filter((doc): doc is RxDocument<MessageDoc> => !!doc),
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPinnedMessageIds, messages]);
 
   useEffect(() => {
     if (!focusedMessageId) return;
@@ -514,6 +582,26 @@ export function MessageList({
     });
   }
 
+  async function togglePin(doc: RxDocument<MessageDoc>) {
+    if (!currentChannel) return;
+    const ids = pinnedMessageIds(currentChannel);
+    const next = ids.includes(doc.id)
+      ? ids.filter((id) => id !== doc.id)
+      : [...ids, doc.id];
+    await currentChannel.incrementalPatch({
+      pinnedMessageIds: next,
+      updatedAt: Date.now(),
+    });
+  }
+
+  function selectPinnedMessage(message: RxDocument<MessageDoc>) {
+    setDocs((prev) => {
+      if (prev.some((doc) => doc.id === message.id)) return prev;
+      return mergeDocs(prev, [message]);
+    });
+    setPendingPinnedFocusId(message.id);
+  }
+
   return (
     <main className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat md:-ml-5 md:rounded-[28px] md:shadow-xl md:ring-1 md:ring-black/5">
       <MessageListHeader
@@ -525,10 +613,12 @@ export function MessageList({
             ? null
             : (channelDocs.find((c) => c.id === view)?.description ?? null)
         }
+        pinnedMessages={pinnedDocs}
         counts={counts}
         onOpenMenu={onOpenMenu}
         onOpenSettings={onOpenSettings}
         onOpenSearch={onOpenSearch}
+        onSelectPinnedMessage={selectPinnedMessage}
       />
 
       <div className="relative min-h-0 flex-1">
@@ -570,6 +660,7 @@ export function MessageList({
                   highlighted={highlightedId === row.doc.id}
                   embeds={embedsByMessage.get(row.doc.id)}
                   attachments={attachmentsByMessage.get(row.doc.id)}
+                  pinned={currentPinnedSet.has(row.doc.id)}
                   onStartEdit={startEdit}
                   onCancelEdit={cancelEdit}
                   onSaveEdit={saveEdit}
@@ -577,6 +668,7 @@ export function MessageList({
                   onToggleTask={toggleTask}
                   onCopy={copyMessage}
                   onDelete={deleteMessage}
+                  onTogglePin={togglePin}
                   onToggleChannelPicker={(doc) =>
                     setChannelPickerId((id) => (id === doc.id ? null : doc.id))
                   }
@@ -592,7 +684,8 @@ export function MessageList({
 
       <MessageComposer
         pending={pending}
-        composerKey={composerKey}
+        composerKey={`${view}:${composerKey}:${composerInitialValue}`}
+        initialValue={composerInitialValue}
         composerRef={composerRef}
         fileInputRef={fileInputRef}
         channels={channelDocs}
@@ -610,6 +703,19 @@ export function MessageList({
             <MessageActionSheet
               onClose={() => setActionSheetId(null)}
               actions={[
+                ...(currentChannel
+                  ? [
+                      {
+                        label: currentPinnedSet.has(target.id)
+                          ? "Unpin"
+                          : "Pin",
+                        Icon: currentPinnedSet.has(target.id)
+                          ? IconPinOff
+                          : IconPin,
+                        onSelect: () => void togglePin(target),
+                      },
+                    ]
+                  : []),
                 {
                   label: "Edit spaces",
                   Icon: IconTags,
