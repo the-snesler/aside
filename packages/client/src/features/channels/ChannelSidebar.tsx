@@ -81,9 +81,14 @@ export function ChannelSidebar({
   const [editDraft, setEditDraft] = useState("");
   const [creating, setCreating] = useState(false);
   const [draftName, setDraftName] = useState("");
-  // Channel currently under a dragged note, for the drop-target highlight.
+  // Channel currently under a dragged note, for the file-into-channel ring.
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dragChannelId, setDragChannelId] = useState<string | null>(null);
+  // While reordering, which channel the insertion line sits above/below.
+  const [dropEdge, setDropEdge] = useState<{
+    id: string;
+    edge: "top" | "bottom";
+  } | null>(null);
 
   useEffect(() => {
     const sub = collection.find().$.subscribe((found) => {
@@ -128,14 +133,27 @@ export function ChannelSidebar({
     { id: PHOTOS_ID, label: "Photos", Icon: IconImage, count: counts.photos },
   ];
 
-  async function moveChannel(beforeId: string, afterId: string) {
-    if (beforeId === afterId) return;
-    const from = channels.findIndex((channel) => channel.id === beforeId);
-    const to = channels.findIndex((channel) => channel.id === afterId);
-    if (from === -1 || to === -1) return;
+  // Reorder so `dragId` lands above (edge "top") or below (edge "bottom")
+  // `hoverId`. Returns the new order, or null if it's a no-op.
+  function computeReorder(
+    dragId: string,
+    hoverId: string,
+    edge: "top" | "bottom",
+  ): RxDocument<ChannelDoc>[] | null {
+    const from = channels.findIndex((channel) => channel.id === dragId);
+    const hover = channels.findIndex((channel) => channel.id === hoverId);
+    if (from === -1 || hover === -1) return null;
+    let insertBefore = edge === "top" ? hover : hover + 1;
+    // Dropping into the slot it already occupies changes nothing.
+    if (insertBefore === from || insertBefore === from + 1) return null;
     const ordered = [...channels];
     const [moved] = ordered.splice(from, 1);
-    ordered.splice(to, 0, moved);
+    if (from < insertBefore) insertBefore -= 1;
+    ordered.splice(insertBefore, 0, moved);
+    return ordered;
+  }
+
+  async function persistOrder(ordered: RxDocument<ChannelDoc>[]) {
     setChannels(ordered);
     const now = Date.now();
     await Promise.all(
@@ -245,46 +263,74 @@ export function ChannelSidebar({
                 ) : (
                   <div
                     draggable
-                    className={`group relative rounded-xl ${dropTargetId === doc.id || dragChannelId === doc.id
-                      ? "ring-2 ring-accent"
-                      : ""
-                      }`}
+                    className={`group relative rounded-xl transition-opacity ${dropTargetId === doc.id ? "ring-2 ring-accent" : ""
+                      } ${dragChannelId === doc.id ? "opacity-40" : ""}`}
                     onDragStart={(e) => {
                       e.dataTransfer.setData(CHANNEL_DRAG_TYPE, doc.id);
                       e.dataTransfer.effectAllowed = "move";
                       setDragChannelId(doc.id);
                     }}
-                    onDragEnd={() => setDragChannelId(null)}
-                    onDragOver={(e) => {
-                      if (
-                        !e.dataTransfer.types.includes(MESSAGE_DRAG_TYPE) &&
-                        !e.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)
-                      )
-                        return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = e.dataTransfer.types.includes(
-                        CHANNEL_DRAG_TYPE,
-                      )
-                        ? "move"
-                        : "copy";
-                      setDropTargetId(doc.id);
+                    onDragEnd={() => {
+                      setDragChannelId(null);
+                      setDropEdge(null);
                     }}
-                    onDragLeave={() =>
-                      setDropTargetId((id) => (id === doc.id ? null : id))
-                    }
+                    onDragOver={(e) => {
+                      const isChannel =
+                        e.dataTransfer.types.includes(CHANNEL_DRAG_TYPE);
+                      const isMessage =
+                        e.dataTransfer.types.includes(MESSAGE_DRAG_TYPE);
+                      if (!isChannel && !isMessage) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = isChannel ? "move" : "copy";
+                      if (isChannel) {
+                        // Insertion line follows the pointer's half of the row.
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const edge: "top" | "bottom" =
+                          e.clientY - rect.top < rect.height / 2
+                            ? "top"
+                            : "bottom";
+                        const next =
+                          dragChannelId &&
+                          computeReorder(dragChannelId, doc.id, edge)
+                            ? { id: doc.id, edge }
+                            : null;
+                        setDropEdge(next);
+                        setDropTargetId(null);
+                      } else {
+                        setDropTargetId(doc.id);
+                        setDropEdge(null);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      setDropTargetId((id) => (id === doc.id ? null : id));
+                      setDropEdge((e) => (e?.id === doc.id ? null : e));
+                    }}
                     onDrop={(e) => {
                       const channelId =
                         e.dataTransfer.getData(CHANNEL_DRAG_TYPE);
                       const messageId =
                         e.dataTransfer.getData(MESSAGE_DRAG_TYPE);
+                      const edge =
+                        dropEdge?.id === doc.id ? dropEdge.edge : null;
                       setDropTargetId(null);
+                      setDropEdge(null);
                       setDragChannelId(null);
                       if (!channelId && !messageId) return;
                       e.preventDefault();
-                      if (channelId) void moveChannel(channelId, doc.id);
-                      else onDropMessage(doc.id, messageId);
+                      if (channelId) {
+                        if (!edge) return;
+                        const ordered = computeReorder(channelId, doc.id, edge);
+                        if (ordered) void persistOrder(ordered);
+                      } else onDropMessage(doc.id, messageId);
                     }}
                   >
+                    {dropEdge?.id === doc.id && (
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full bg-accent ${dropEdge.edge === "top" ? "-top-0.5" : "-bottom-0.5"
+                          }`}
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => onSelect(doc.id)}

@@ -29,12 +29,13 @@
 }
 
 @layer base {
+
   html,
   body,
   #root {
     height: 100%;
   }
-  
+
   /* Stop the page itself from rubber-banding on iOS so the app feels native;
    inner scrollers (message list, sidebar) opt into `overscroll-contain` so
    their bounce doesn't chain up to the document. */
@@ -42,7 +43,7 @@
   body {
     overscroll-behavior: none;
   }
-  
+
   /*
    * Per-device display preferences (see appearance.ts). Density drives message
    * spacing through these vars; text size scales rem-based utilities by setting
@@ -53,6 +54,7 @@
     --msg-pad-y: 0.5rem;
     --msg-gap: 0.25rem;
   }
+
   :root[data-density="compact"] {
     --msg-pad-y: 0.1875rem;
     --msg-gap: 0.125rem;
@@ -61,6 +63,7 @@
   :root[data-text-size="small"] {
     font-size: 14px;
   }
+
   :root[data-text-size="large"] {
     font-size: 18px;
   }
@@ -72,7 +75,7 @@
     animation: none !important;
     scroll-behavior: auto !important;
   }
- 
+
 
   body {
     margin: 0;
@@ -101,10 +104,12 @@
   .message-md {
     line-height: 1.5;
   }
-  .message-md > :first-child {
+
+  .message-md> :first-child {
     margin-top: 0;
   }
-  .message-md > :last-child {
+
+  .message-md> :last-child {
     margin-bottom: 0;
   }
 
@@ -120,15 +125,19 @@
     font-weight: 600;
     line-height: 1.25;
   }
+
   .message-md h1 {
     font-size: 1.35rem;
   }
+
   .message-md h2 {
     font-size: 1.2rem;
   }
+
   .message-md h3 {
     font-size: 1.08rem;
   }
+
   .message-md h4 {
     font-size: 1rem;
   }
@@ -143,22 +152,27 @@
     margin: 0.25rem 0;
     padding-left: 1.5rem;
   }
+
   .message-md ul {
     list-style: disc;
   }
+
   .message-md ol {
     list-style: decimal;
   }
+
   .message-md li {
     margin: 0.1rem 0;
   }
+
   /* GFM task lists: drop the bullet and tuck the checkbox into the bullet
      gutter. Pulling the checkbox (rather than the <li>) leftward keeps the
      <li> at its natural position, so nested task lists keep their indent. */
   .message-md li:has(> input[type="checkbox"]) {
     list-style: none;
   }
-  .message-md li > input[type="checkbox"] {
+
+  .message-md li>input[type="checkbox"] {
     margin-left: -1.25rem;
     margin-right: 0.4rem;
   }
@@ -193,6 +207,7 @@
     border-radius: 0.5rem;
     overflow-x: auto;
   }
+
   .message-md pre code {
     background: none;
     padding: 0;
@@ -207,12 +222,14 @@
     margin: 0.4rem 0;
     font-size: 0.9em;
   }
+
   .message-md th,
   .message-md td {
     border: 1px solid var(--color-divider);
     padding: 0.3rem 0.6rem;
     text-align: left;
   }
+
   .message-md th {
     background-color: var(--color-hover);
   }
@@ -223,51 +240,62 @@
     color: #6e7781;
     font-style: italic;
   }
+
   .message-md .hljs-keyword,
   .message-md .hljs-selector-tag,
   .message-md .hljs-literal,
   .message-md .hljs-section {
     color: #cf222e;
   }
+
   .message-md .hljs-string,
   .message-md .hljs-regexp,
   .message-md .hljs-meta .hljs-string {
     color: #0a3069;
   }
+
   .message-md .hljs-number,
   .message-md .hljs-symbol,
   .message-md .hljs-bullet {
     color: #0550ae;
   }
+
   .message-md .hljs-title,
   .message-md .hljs-title.function_,
   .message-md .hljs-title.class_ {
     color: #8250df;
   }
+
   .message-md .hljs-built_in,
   .message-md .hljs-type {
     color: #953800;
   }
+
   .message-md .hljs-attr,
   .message-md .hljs-attribute,
   .message-md .hljs-property {
     color: #0550ae;
   }
+
   .message-md .hljs-tag,
   .message-md .hljs-name {
     color: #116329;
   }
+
   .message-md .hljs-variable,
   .message-md .hljs-template-variable {
     color: #953800;
   }
+
   .message-md .hljs-meta,
   .message-md .hljs-doctag {
     color: #6e7781;
   }
+
   .message-md .hljs-emphasis {
     font-style: italic;
   }
+
   .message-md .hljs-strong {
     font-weight: 600;
   }
@@ -282,12 +310,14 @@
     font-weight: 600;
     font-size: 1.15rem;
   }
+
   /* A `#tag` mention while still raw text (pre-chip): accent it instead of
    * letting it read as a heading. Confirmed mentions render as MentionChip. */
   .composer-md-mention {
     color: var(--color-accent);
     font-weight: 500;
   }
+
   .composer-md-code {
     /* The editor box is bg-rail, so use a lighter shade for the code chip. */
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
