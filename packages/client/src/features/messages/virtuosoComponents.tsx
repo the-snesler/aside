@@ -37,7 +37,7 @@ function ListEmpty({ context }: { context?: ListContext }) {
     <p className="px-2 py-8 text-center text-sm text-muted">
       {context?.smartView
         ? "No notes here yet."
-        : "No notes in this space yet."}
+        : "No notes in this channel yet."}
     </p>
   );
 }

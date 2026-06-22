@@ -10,11 +10,25 @@ Aside is a local-first notetaking app. Sometimes, when you just want to save an 
 - **Selfhostable**: Runs in a single Docker container so your notes stay yours. Export to Markdown, HTML, or PDF if you need to.
 - **Link previews**: Include a link in your message, and Aside will render it into a social preview.
 - **Attachments**: Save pictures for later, or easily transfer them between devices.
-- **Spaces**: Tag a note with a #space and it'll get moved there, or drag and drop it to a space on the sidebar. Notes can exist in multiple spaces.
+- **Channels**: Tag a note with a #channel and it'll get moved there, or drag and drop it to a channel on the sidebar. Notes can exist in multiple channels.
 - **Feeds**: Pull in your bookmarks from X (formerly Twitter), RSS, or webhooks
-- **Ambient AI**: Optional AI can move new notes to an appropriate Space, including notes from feeds.
-- **Search**: Quickly search through all past notes and attachments, with filters for Spaces and times.
+- **Ambient AI**: Optional AI can move new notes to an appropriate Channel, including notes from feeds.
+- **Search**: Quickly search through all past notes and attachments, with filters for Channels and times.
 
 <img width="2996" height="1976" alt="image" src="https://github.com/user-attachments/assets/92d8612d-c4b8-4dec-a93d-fbcdf715274c" />
 
 <img width="2996" height="1976" alt="image" src="https://github.com/user-attachments/assets/7d801c68-bfb3-41b9-9242-e597dc67ab47" />
+
+### Self-hosting
+
+Aside runs as a single Docker Compose service with SQLite, blobs, and feed data
+stored in the local `./data` directory:
+
+```sh
+git clone https://github.com/the-snesler/aside.git
+cd aside
+docker compose up
+```
+
+Then open `http://localhost:3001`. For local/dev installs, the default UI
+password is `admin`.

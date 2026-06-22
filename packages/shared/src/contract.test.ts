@@ -76,7 +76,7 @@ describe("message contract", () => {
 const channelSample: ReplicatedChannelDoc = {
   id: "channel-1",
   name: "general",
-  description: "Catch-all space for notes that don't fit elsewhere.",
+  description: "Catch-all channel for notes that don't fit elsewhere.",
   createdAt: 1,
   updatedAt: 2,
   _deleted: false,

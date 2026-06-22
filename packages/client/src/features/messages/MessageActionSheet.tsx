@@ -9,11 +9,9 @@ export interface MessageAction {
 }
 
 /**
- * Mobile long-press menu: a sheet that slides up from the bottom with the same
- * actions as the desktop hover bar (edit spaces, edit, copy, delete). Rendered
- * through a portal over a tap-to-dismiss scrim, mirroring SearchPalette's
- * overlay pattern. The hover bar is hover-only, so touch users reach actions
- * here instead.
+ * Mobile long-press menu: a sheet that slides up from the bottom with note
+ * actions. Rendered through a portal over a tap-to-dismiss scrim, mirroring
+ * SearchPalette's overlay pattern.
  */
 export function MessageActionSheet({
   actions,

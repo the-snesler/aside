@@ -1,6 +1,6 @@
 /**
  * A small fixed palette of pastel-ish accents for the colored square next to
- * each space in the sidebar. Channels carry no color of their own, so we pick
+ * each channel in the sidebar. Channels carry no color of their own, so we pick
  * one deterministically from the name — stable across reloads and devices
  * without storing anything.
  */

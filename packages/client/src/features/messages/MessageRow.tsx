@@ -4,10 +4,20 @@ import type {
   EmbedDoc,
   MessageDoc,
 } from "@aside/shared";
+import {
+  autoUpdate,
+  flip,
+  FloatingPortal,
+  offset,
+  shift,
+  useDismiss,
+  useFloating,
+  useInteractions,
+  useRole,
+} from "@floating-ui/react";
 import type { RxDocument } from "rxdb";
-import { useRef } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import IconCopy from "~icons/lucide/copy";
-import IconPencil from "~icons/lucide/pencil";
 import IconTags from "~icons/lucide/tags";
 import IconTrash from "~icons/lucide/trash-2";
 import { blobUrl } from "../attachments/api";
@@ -33,10 +43,12 @@ export function MessageRow({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  onSaveDate,
   onToggleTask,
   onCopy,
   onDelete,
   onToggleChannelPicker,
+  onCloseChannelPicker,
   onToggleChannel,
   onLongPress,
 }: {
@@ -52,6 +64,7 @@ export function MessageRow({
   onStartEdit: (doc: RxDocument<MessageDoc>) => void;
   onCancelEdit: () => void;
   onSaveEdit: (doc: RxDocument<MessageDoc>, raw: string) => Promise<void>;
+  onSaveDate: (doc: RxDocument<MessageDoc>, createdAt: number) => Promise<void>;
   onToggleTask: (
     doc: RxDocument<MessageDoc>,
     nextText: string,
@@ -59,6 +72,7 @@ export function MessageRow({
   onCopy: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onDelete: (doc: RxDocument<MessageDoc>) => Promise<void>;
   onToggleChannelPicker: (doc: RxDocument<MessageDoc>) => void;
+  onCloseChannelPicker: () => void;
   onToggleChannel: (
     doc: RxDocument<MessageDoc>,
     channelId: string,
@@ -68,6 +82,40 @@ export function MessageRow({
   const lightbox = useLightbox();
   const isTouch = useIsTouch();
   const editorRef = useRef<MarkdownEditorHandle>(null);
+  const [dateEditorOpen, setDateEditorOpen] = useState(false);
+  const [dateValue, setDateValue] = useState(() =>
+    toDateTimeInputValue(doc.createdAt),
+  );
+  const dateFloating = useFloating({
+    open: dateEditorOpen,
+    onOpenChange: setDateEditorOpen,
+    placement: "bottom-start",
+    whileElementsMounted: autoUpdate,
+    middleware: [offset(6), flip(), shift({ padding: 8 })],
+  });
+  const channelFloating = useFloating({
+    open: channelPickerOpen,
+    onOpenChange: (open) => {
+      if (!open) onCloseChannelPicker();
+    },
+    placement: "bottom-end",
+    whileElementsMounted: autoUpdate,
+    middleware: [offset(6), flip(), shift({ padding: 8 })],
+  });
+  const {
+    getReferenceProps: getDateReferenceProps,
+    getFloatingProps: getDateFloatingProps,
+  } = useInteractions([
+    useDismiss(dateFloating.context),
+    useRole(dateFloating.context, { role: "dialog" }),
+  ]);
+  const {
+    getReferenceProps: getChannelReferenceProps,
+    getFloatingProps: getChannelFloatingProps,
+  } = useInteractions([
+    useDismiss(channelFloating.context),
+    useRole(channelFloating.context, { role: "menu" }),
+  ]);
   // Long-press → action sheet on touch. A timer started on pointer-down fires
   // unless the finger moves (a scroll) or lifts first.
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,6 +128,14 @@ export function MessageRow({
     }
     pressStart.current = null;
   }
+
+  useEffect(() => {
+    if (isEditing) {
+      setDateEditorOpen(false);
+      onCloseChannelPicker();
+    }
+  }, [isEditing, onCloseChannelPicker]);
+
   const channelIds = messageChannelIds(doc);
   const channelLabel = channelIds
     .map((channelId) => channelNames.get(channelId))
@@ -117,9 +173,36 @@ export function MessageRow({
     if (i !== -1) lightbox.open(messageImages, embedImages.length + i);
   }
 
+  function handleRowClick(e: MouseEvent<HTMLDivElement>) {
+    if (isEditing || e.defaultPrevented || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (window.getSelection()?.toString()) return;
+    const target = e.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        'a, button, input, textarea, select, [role="button"], [data-no-row-edit]',
+      )
+    ) {
+      return;
+    }
+    onStartEdit(doc);
+  }
+
+  async function saveDate() {
+    const next = new Date(dateValue).getTime();
+    if (!Number.isFinite(next) || next < 0 || next === doc.createdAt) {
+      setDateEditorOpen(false);
+      return;
+    }
+    await onSaveDate(doc, next);
+    setDateEditorOpen(false);
+  }
+
   return (
     <div
       draggable={!isEditing}
+      onClick={handleRowClick}
       onDragStart={(e) => {
         e.dataTransfer.setData("application/x-aside-message-id", doc.id);
         e.dataTransfer.effectAllowed = "copy";
@@ -141,12 +224,66 @@ export function MessageRow({
         // Suppress the OS long-press/right-click menu so ours shows instead.
         if (isTouch) e.preventDefault();
       }}
-      className={`group w-full relative flex gap-3 rounded-xl px-2 py-[var(--msg-pad-y)] transition-all hover:bg-hover md:px-3 ${
-        highlighted ? "bg-active ring-2 ring-accent/60" : ""
-      }`}
+      className={`group w-full relative flex gap-3 rounded-xl px-2 py-(--msg-pad-y) transition-all hover:bg-hover md:px-3 ${highlighted ? "bg-active ring-2 ring-accent/60" : ""
+        }`}
     >
-      <span className="w-11 shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted">
-        {formatTime(doc.createdAt)}
+      <span className="relative w-14 shrink-0 pt-0.5 text-right text-[0.65rem] tabular-nums text-muted">
+        <button
+          type="button"
+          ref={dateFloating.refs.setReference}
+          {...getDateReferenceProps({
+            onClick: () => {
+              setDateValue(toDateTimeInputValue(doc.createdAt));
+              setDateEditorOpen((open) => !open);
+            },
+          })}
+          className="rounded py-0.5 tabular-nums hover:bg-panel hover:text-ink"
+          aria-label="Edit note date"
+        >
+          {formatTime(doc.createdAt)}
+        </button>
+        {dateEditorOpen && (
+          <FloatingPortal>
+            <form
+              ref={dateFloating.refs.setFloating}
+              style={dateFloating.floatingStyles}
+              {...getDateFloatingProps({
+                onSubmit: (e) => {
+                  e.preventDefault();
+                  void saveDate();
+                },
+              })}
+              data-no-row-edit
+              className="z-30 w-64 rounded-xl bg-panel p-3 text-left text-sm shadow-xl ring-1 ring-divider"
+            >
+              <label className="block text-xs font-medium uppercase tracking-wide text-muted">
+                Date
+              </label>
+              <input
+                type="datetime-local"
+                min="1970-01-01T00:00"
+                value={dateValue}
+                onChange={(e) => setDateValue(e.target.value)}
+                className="mt-1 w-full rounded-lg bg-chat px-2 py-1.5 text-ink outline-none ring-1 ring-divider focus:ring-accent"
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDateEditorOpen(false)}
+                  className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-hover hover:text-ink"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </FloatingPortal>
+        )}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-[var(--msg-gap)]">
         {smartView && (
@@ -210,22 +347,20 @@ export function MessageRow({
         )}
       </div>
       {!isEditing && (
-        <span className="absolute right-2 top-0 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider group-hover:flex">
+        <span
+          className={`absolute right-2 top-0 -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider ${channelPickerOpen ? "flex" : "hidden group-hover:flex"
+            }`}
+        >
           <button
             type="button"
-            onClick={() => onToggleChannelPicker(doc)}
+            ref={channelFloating.refs.setReference}
+            {...getChannelReferenceProps({
+              onClick: () => onToggleChannelPicker(doc),
+            })}
             aria-label="Edit spaces"
             className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
           >
             <IconTags className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onStartEdit(doc)}
-            aria-label="Edit"
-            className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconPencil className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -246,32 +381,45 @@ export function MessageRow({
         </span>
       )}
       {!isEditing && channelPickerOpen && (
-        <div className="absolute right-2 top-6 z-20 w-56 rounded-xl bg-panel p-2 text-sm shadow-xl ring-1 ring-divider">
-          {channels.map((channel) => {
-            const checked = channelIds.includes(channel.id);
-            const disabled = checked && channelIds.length === 1;
-            return (
-              <label
-                key={channel.id}
-                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
-                  disabled ? "text-muted" : "text-ink hover:bg-hover"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => void onToggleChannel(doc, channel.id)}
-                  className="h-4 w-4 accent-[var(--color-accent)]"
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="text-muted">#</span> {channel.name}
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <FloatingPortal>
+          <div
+            ref={channelFloating.refs.setFloating}
+            style={channelFloating.floatingStyles}
+            {...getChannelFloatingProps()}
+            data-no-row-edit
+            className="z-30 w-56 rounded-xl bg-panel p-2 text-sm shadow-xl ring-1 ring-divider"
+          >
+            {channels.map((channel) => {
+              const checked = channelIds.includes(channel.id);
+              const disabled = checked && channelIds.length === 1;
+              return (
+                <label
+                  key={channel.id}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${disabled ? "text-muted" : "text-ink hover:bg-hover"
+                    }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => void onToggleChannel(doc, channel.id)}
+                    className="h-4 w-4 accent-[var(--color-accent)]"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="text-muted">#</span> {channel.name}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </FloatingPortal>
       )}
     </div>
   );
+}
+
+function toDateTimeInputValue(ts: number): string {
+  const date = new Date(ts);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(ts - offsetMs).toISOString().slice(0, 16);
 }

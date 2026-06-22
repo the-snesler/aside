@@ -109,6 +109,7 @@ export function MessageList({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [liveAfter, setLiveAfter] = useState<number | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [sentMessageId, setSentMessageId] = useState<string | null>(null);
   // Virtuoso is mounted only once the first page has resolved, so its
   // initialTopMostItemIndex sees the real row count and opens at the newest note.
   const [initialLoadDone, setInitialLoadDone] = useState(false);
@@ -235,6 +236,23 @@ export function MessageList({
   const rows = useMemo(() => rowsByDay(docs), [docs]);
 
   useEffect(() => {
+    if (!sentMessageId) return;
+    const index = rows.findIndex(
+      (row) => row.type === "message" && row.doc.id === sentMessageId,
+    );
+    if (index === -1) {
+      setSentMessageId(null);
+      return;
+    }
+    virtuosoRef.current?.scrollToIndex({
+      index,
+      align: "end",
+      behavior: "smooth",
+    });
+    setSentMessageId(null);
+  }, [rows, sentMessageId]);
+
+  useEffect(() => {
     // Briefly ignore startReached after a view switch so Virtuoso's initial
     // measurement (which can momentarily report the top) doesn't trigger a load.
     setAutoHistoryEnabled(false);
@@ -326,7 +344,7 @@ export function MessageList({
 
     // CH-4: a #tag files the note in an existing channel of that name and is
     // stripped from the saved text. With no match the note stays in the current
-    // space (or #general from a smart view) and the tag is kept as plain text.
+    // channel (or #general from a smart view) and the tag is kept as plain text.
     let targetChannelId = smartView ? DEFAULT_CHANNEL_ID : view;
     let body = trimmed;
     if (trimmed) {
@@ -369,6 +387,7 @@ export function MessageList({
     clearPending();
     if (matchesView(view, inserted, imageMessageIds)) {
       setDocs((prev) => mergeDocs(prev, [inserted]));
+      setSentMessageId(inserted.id);
     }
     // Remount the composer to clear it and put the caret back.
     setComposerKey((k) => k + 1);
@@ -405,6 +424,7 @@ export function MessageList({
 
   function startEdit(doc: RxDocument<MessageDoc>) {
     setEditingId(doc.id);
+    setChannelPickerId(null);
   }
 
   function cancelEdit() {
@@ -433,6 +453,21 @@ export function MessageList({
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
+  }
+
+  async function saveDate(doc: RxDocument<MessageDoc>, createdAt: number) {
+    const updated = await doc.incrementalPatch({
+      createdAt,
+      updatedAt: Date.now(),
+    });
+    setDocs((prev) => {
+      return matchesView(view, updated, imageMessageIds)
+        ? mergeDocs(
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
+        : prev.filter((item) => item.id !== updated.id);
+    });
   }
 
   async function toggleTask(doc: RxDocument<MessageDoc>, nextText: string) {
@@ -538,12 +573,14 @@ export function MessageList({
                   onStartEdit={startEdit}
                   onCancelEdit={cancelEdit}
                   onSaveEdit={saveEdit}
+                  onSaveDate={saveDate}
                   onToggleTask={toggleTask}
                   onCopy={copyMessage}
                   onDelete={deleteMessage}
                   onToggleChannelPicker={(doc) =>
                     setChannelPickerId((id) => (id === doc.id ? null : doc.id))
                   }
+                  onCloseChannelPicker={() => setChannelPickerId(null)}
                   onToggleChannel={toggleMessageChannel}
                   onLongPress={(doc) => setActionSheetId(doc.id)}
                 />

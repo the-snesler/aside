@@ -164,11 +164,10 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-active text-ink shadow-sm"
-                      : "text-ink/80 hover:bg-hover"
-                  }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
+                    ? "bg-active text-ink shadow-sm"
+                    : "text-ink/80 hover:bg-hover"
+                    }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -210,9 +209,8 @@ export function ChannelSidebar({
                   />
                 ) : (
                   <div
-                    className={`group relative rounded-xl ${
-                      dropTargetId === doc.id ? "ring-2 ring-accent" : ""
-                    }`}
+                    className={`group relative rounded-xl ${dropTargetId === doc.id ? "ring-2 ring-accent" : ""
+                      }`}
                     onDragOver={(e) => {
                       if (!e.dataTransfer.types.includes(MESSAGE_DRAG_TYPE))
                         return;
@@ -239,11 +237,10 @@ export function ChannelSidebar({
                         setEditingId(doc.id);
                         setEditDraft(doc.name);
                       }}
-                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${
-                        active
-                          ? "bg-active text-ink shadow-sm"
-                          : "hover:bg-hover"
-                      }`}
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${active
+                        ? "bg-active text-ink shadow-sm"
+                        : "hover:bg-hover"
+                        }`}
                       title={
                         doc.description ||
                         "Click to open · double-click to rename"
@@ -299,7 +296,7 @@ export function ChannelSidebar({
                   setDraftName("");
                 }
               }}
-              placeholder="new-space"
+              placeholder="new-channel"
               className="w-full rounded-xl bg-panel px-3 py-2 text-sm text-ink outline-none ring-1 ring-accent placeholder:text-muted"
             />
           </form>
@@ -310,7 +307,7 @@ export function ChannelSidebar({
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-hover hover:text-ink"
           >
             <IconPlus className="h-4 w-4" />
-            New space
+            New channel
           </button>
         )}
       </div>
