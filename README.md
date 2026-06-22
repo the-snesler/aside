@@ -1,4 +1,4 @@
-<img width="192" height="192" alt="icon-192" src="https://github.com/user-attachments/assets/b6565d8f-16be-492f-a0e2-97a606a2a57e" />
+<img width="512" alt="image" src="https://github.com/user-attachments/assets/a8da096d-cd31-43f4-9586-386ae92a7086" />
 
 ## Aside
 
@@ -15,9 +15,12 @@ Aside is a local-first notetaking app. Sometimes, when you just want to save an 
 - **Ambient AI**: Optional AI can move new notes to an appropriate Channel, including notes from feeds.
 - **Search**: Quickly search through all past notes and attachments, with filters for Channels and times.
 
-<img width="2996" height="1976" alt="image" src="https://github.com/user-attachments/assets/92d8612d-c4b8-4dec-a93d-fbcdf715274c" />
+### Screenshots
 
-<img width="2996" height="1976" alt="image" src="https://github.com/user-attachments/assets/7d801c68-bfb3-41b9-9242-e597dc67ab47" />
+<img width="1440" alt="image" src="https://github.com/user-attachments/assets/c03f0f40-6e16-453b-a9d1-525815c931f6" />
+
+<img width="1440" alt="image" src="https://github.com/user-attachments/assets/67fcdaef-d339-4798-8837-432bd3d9df2c" />
+
 
 ### Self-hosting
 
