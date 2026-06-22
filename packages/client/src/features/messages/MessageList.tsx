@@ -475,9 +475,9 @@ export function MessageList({
       setDocs((prev) => {
         return matchesView(view, updated, imageMessageIds)
           ? mergeDocs(
-              prev.filter((item) => item.id !== updated.id),
-              [updated],
-            )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
           : prev.filter((item) => item.id !== updated.id);
       });
       return;
@@ -515,9 +515,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
@@ -531,9 +531,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -549,9 +549,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -575,9 +575,9 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, imageMessageIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -705,19 +705,19 @@ export function MessageList({
               actions={[
                 ...(currentChannel
                   ? [
-                      {
-                        label: currentPinnedSet.has(target.id)
-                          ? "Unpin"
-                          : "Pin",
-                        Icon: currentPinnedSet.has(target.id)
-                          ? IconPinOff
-                          : IconPin,
-                        onSelect: () => void togglePin(target),
-                      },
-                    ]
+                    {
+                      label: currentPinnedSet.has(target.id)
+                        ? "Unpin"
+                        : "Pin",
+                      Icon: currentPinnedSet.has(target.id)
+                        ? IconPinOff
+                        : IconPin,
+                      onSelect: () => void togglePin(target),
+                    },
+                  ]
                   : []),
                 {
-                  label: "Edit spaces",
+                  label: "Edit channels",
                   Icon: IconTags,
                   onSelect: () => setChannelPickerId(target.id),
                 },

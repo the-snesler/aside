@@ -126,7 +126,7 @@ export function SearchPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search notes, previews, files, and spaces"
+            placeholder="Search notes, previews, files, and channels"
             className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-muted"
           />
           <button
@@ -144,11 +144,10 @@ export function SearchPalette({
             <button
               type="button"
               onClick={() => setScopeCurrent((value) => !value)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                scopeCurrent
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${scopeCurrent
                   ? "bg-active text-accent"
                   : "bg-hover text-muted hover:text-ink"
-              }`}
+                }`}
             >
               {scopeCurrent ? `#${activeChannel.name}` : "All notes"}
             </button>
@@ -160,11 +159,10 @@ export function SearchPalette({
                   key={option}
                   type="button"
                   onClick={() => setSort(option)}
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize transition-colors ${
-                    sort === option
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize transition-colors ${sort === option
                       ? "bg-panel text-ink shadow-sm"
                       : "text-muted"
-                  }`}
+                    }`}
                 >
                   {option}
                 </button>
@@ -272,9 +270,8 @@ function ChannelRow({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
-        active ? "bg-active" : "hover:bg-hover"
-      }`}
+      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors ${active ? "bg-active" : "hover:bg-hover"
+        }`}
     >
       <span
         className="h-3.5 w-3.5 shrink-0 rounded-[5px]"
@@ -306,9 +303,8 @@ function NoteRow({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-full gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
-        active ? "bg-active" : "hover:bg-hover"
-      }`}
+      className={`flex w-full gap-3 rounded-xl px-3 py-2 text-left transition-colors ${active ? "bg-active" : "hover:bg-hover"
+        }`}
     >
       <IconHash className="mt-1 h-4 w-4 shrink-0 text-muted" />
       <div className="min-w-0 flex-1">

@@ -1,6 +1,33 @@
 @import "tailwindcss";
 
 /*
+ * Rubik (the app's UI typeface). Subset to Latin/Latin-ext and shipped as a
+ * single variable font per style — the `wght 300 900` range covers every weight
+ * the UI requests (normal 400, semibold 600, etc.) from one file. Sources live
+ * in public/fonts/; see scripts/notes in the repo for how the .ttf originals
+ * were subset + converted with pyftsubset. `swap` avoids a blocking FOIT.
+ */
+@font-face {
+  font-family: "Rubik";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src:
+    url("/fonts/Rubik-latin-variable.woff2") format("woff2"),
+    url("/fonts/Rubik-latin-variable.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Rubik";
+  font-style: italic;
+  font-weight: 300 900;
+  font-display: swap;
+  src:
+    url("/fonts/Rubik-Italic-latin-variable.woff2") format("woff2"),
+    url("/fonts/Rubik-Italic-latin-variable.woff") format("woff");
+}
+
+/*
  * Arc-inspired light palette. Each token becomes a Tailwind color utility,
  * e.g. `--color-sidebar` → `bg-sidebar` / `text-sidebar` / `border-sidebar`.
  *
@@ -89,7 +116,7 @@
     background-attachment: fixed;
     color: var(--color-ink);
     font-family:
-      system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+      "Rubik", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
       sans-serif;
   }
 }

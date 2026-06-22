@@ -230,9 +230,8 @@ export function MessageRow({
         // Suppress the OS long-press/right-click menu so ours shows instead.
         if (isTouch) e.preventDefault();
       }}
-      className={`group w-full relative flex gap-3 rounded-xl px-2 py-(--msg-pad-y) transition-all hover:bg-hover md:px-3 ${
-        highlighted ? "bg-active ring-2 ring-accent/60" : ""
-      }`}
+      className={`group w-full relative flex gap-3 rounded-xl px-2 py-(--msg-pad-y) transition-all hover:bg-hover md:px-3 ${highlighted ? "bg-active ring-2 ring-accent/60" : ""
+        }`}
     >
       <span className="relative w-14 shrink-0 pt-0.5 text-right text-[0.65rem] tabular-nums text-muted">
         <button
@@ -355,9 +354,8 @@ export function MessageRow({
       </div>
       {!isEditing && (
         <span
-          className={`absolute right-2 top-0 -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider ${
-            channelPickerOpen ? "flex" : "hidden group-hover:flex"
-          }`}
+          className={`absolute right-2 top-0 -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider ${channelPickerOpen ? "flex" : "hidden group-hover:flex"
+            }`}
         >
           <button
             type="button"
@@ -377,7 +375,7 @@ export function MessageRow({
             {...getChannelReferenceProps({
               onClick: () => onToggleChannelPicker(doc),
             })}
-            aria-label="Edit spaces"
+            aria-label="Edit channels"
             className="rounded-md p-1 text-muted hover:bg-hover hover:text-ink"
           >
             <IconTags className="h-4 w-4" />
@@ -415,9 +413,8 @@ export function MessageRow({
               return (
                 <label
                   key={channel.id}
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
-                    disabled ? "text-muted" : "text-ink hover:bg-hover"
-                  }`}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${disabled ? "text-muted" : "text-ink hover:bg-hover"
+                    }`}
                 >
                   <input
                     type="checkbox"

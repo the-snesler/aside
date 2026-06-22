@@ -63,7 +63,7 @@ export function ChannelSettingsPage({
   async function deleteChannel() {
     if (!doc || doc.id === DEFAULT_CHANNEL_ID) return;
     const ok = window.confirm(
-      `Delete #${doc.name}? Notes stay in other spaces.`,
+      `Delete #${doc.name}? Notes stay in other channels.`,
     );
     if (!ok) return;
     const bumped = await doc.incrementalPatch({ updatedAt: Date.now() });
