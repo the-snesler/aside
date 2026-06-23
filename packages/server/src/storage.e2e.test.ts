@@ -17,8 +17,8 @@ function auth(init: RequestInit = {}): RequestInit {
   };
 }
 
-function jsonPost(path: string, body: unknown): Promise<Response> {
-  return app.request(
+async function jsonPost(path: string, body: unknown): Promise<Response> {
+  return await app.request(
     path,
     auth({
       method: "POST",
