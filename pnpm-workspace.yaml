@@ -8,3 +8,4 @@ allowBuilds:
   protobufjs: false
   puppeteer: true
   rxdb: false
+  sharp: true

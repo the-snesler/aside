@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { startAmbientAi } from "./ai/index.js";
 import { createApp } from "./app.js";
+import { startBlobGc } from "./blobs/gcScheduler.js";
 import { initDb } from "./db/index.js";
 import { startEmbeds } from "./embeds/index.js";
 import { startFeedScheduler } from "./feeds/scheduler.js";
@@ -23,6 +24,10 @@ const app = createApp();
 // Schedule enabled feeds. Cron ticks fire on their own interval; nothing runs
 // on boot, so startup stays fast.
 await startFeedScheduler();
+
+// Periodically purge orphaned blobs (attachments whose messages were deleted,
+// stale thumbnails). Runs on its own cron; nothing sweeps on boot.
+startBlobGc();
 
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`aside server listening on :${info.port}`);

@@ -1,8 +1,23 @@
+import type { AttachmentDoc } from "@aside/shared";
 import type React from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { RxDocument } from "rxdb";
 import { changePassword } from "../../auth";
-import type { ChannelCollection, ConfigCollection } from "../../db/database";
+import type {
+  AttachmentCollection,
+  ChannelCollection,
+  ConfigCollection,
+} from "../../db/database";
 import { useDisplay, type DisplaySettings } from "../../appearance";
+import { blobUrl, thumbUrl } from "../attachments/api";
+import { useLightbox } from "../lightbox/LightboxProvider";
+import {
+  deleteAttachments,
+  getStorageUsage,
+  type BlobCategory,
+  type StorageUsage,
+} from "../storage/api";
+import { formatSize } from "../storage/format";
 import {
   ACCENT_PRESETS,
   applyTheme,
@@ -18,12 +33,14 @@ import { AiSettings } from "../ai/AiSettings";
 import { FeedSettings } from "../feeds/FeedSettings";
 import IconBell from "~icons/lucide/bell";
 import IconDatabase from "~icons/lucide/database";
+import IconFile from "~icons/lucide/file";
 import IconLock from "~icons/lucide/lock-keyhole";
 import IconMenu from "~icons/lucide/menu";
 import IconPalette from "~icons/lucide/palette";
 import IconRss from "~icons/lucide/rss";
 import IconSettings from "~icons/lucide/settings";
 import IconSparkles from "~icons/lucide/sparkles";
+import IconTrash from "~icons/lucide/trash-2";
 
 type SectionId =
   | "ai"
@@ -36,6 +53,7 @@ type SectionId =
 interface Props {
   channels: ChannelCollection;
   config: ConfigCollection;
+  attachments: AttachmentCollection;
   onOpenMenu: () => void;
   onFeedsChanged?: () => Promise<void>;
 }
@@ -88,6 +106,7 @@ const sections: Array<{
 export function SettingsPage({
   channels,
   config,
+  attachments,
   onOpenMenu,
   onFeedsChanged,
 }: Props) {
@@ -161,7 +180,9 @@ export function SettingsPage({
             {activeSection === "appearance" && (
               <AppearanceSettings config={config} />
             )}
-            {activeSection === "storage" && <StorageSettings />}
+            {activeSection === "storage" && (
+              <StorageSettings attachments={attachments} />
+            )}
             {activeSection === "notifications" && <NotificationSettings />}
             {activeSection === "security" && <SecuritySettings />}
           </div>
@@ -389,32 +410,342 @@ function Segmented<T extends string>({
   );
 }
 
-function StorageSettings() {
+const CATEGORY_LABELS: Record<BlobCategory, string> = {
+  image: "Images",
+  video: "Videos",
+  pdf: "PDFs",
+  other: "Other files",
+};
+
+const CATEGORY_COLOR: Record<BlobCategory, string> = {
+  image: "#6366f1",
+  video: "#a855f7",
+  pdf: "#f59e0b",
+  other: "#64748b",
+};
+
+function StorageSettings({ attachments }: { attachments: AttachmentCollection }) {
+  const lightbox = useLightbox();
+  const [usage, setUsage] = useState<StorageUsage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<RxDocument<AttachmentDoc>[]>([]);
+  // Ids deleted this session, hidden until the sync stream drops them locally.
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const refreshUsage = useCallback(() => {
+    getStorageUsage()
+      .then(setUsage)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  useEffect(() => {
+    refreshUsage();
+  }, [refreshUsage]);
+
+  useEffect(() => {
+    const sub = attachments.find().$.subscribe((found) => setItems(found));
+    return () => sub.unsubscribe();
+  }, [attachments]);
+
+  // Newest first; suppress rows we've just deleted until sync catches up.
+  const visible = useMemo(
+    () =>
+      [...items]
+        .filter((a) => !removed.has(a.id))
+        .sort((a, b) => b.createdAt - a.createdAt),
+    [items, removed],
+  );
+
+  const imageItems = useMemo(
+    () => visible.filter((a) => a.mimeType.startsWith("image/")),
+    [visible],
+  );
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function openImage(att: RxDocument<AttachmentDoc>) {
+    const idx = imageItems.findIndex((a) => a.id === att.id);
+    lightbox.open(
+      imageItems.map((a) => ({
+        src: blobUrl(a.blobHash),
+        caption: a.fileName,
+        downloadUrl: blobUrl(a.blobHash),
+      })),
+      idx < 0 ? 0 : idx,
+    );
+  }
+
+  async function removeSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAttachments(ids);
+      setRemoved((prev) => new Set([...prev, ...ids]));
+      setSelected(new Set());
+      setConfirming(false);
+      refreshUsage();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const selectedCount = selected.size;
+  const selectedBytes = visible
+    .filter((a) => selected.has(a.id))
+    .reduce((sum, a) => sum + a.size, 0);
+
   return (
-    <div className="rounded-lg border border-divider bg-panel p-4">
-      <h3 className="text-sm font-semibold text-ink">Local data</h3>
-      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-muted">Database</dt>
-          <dd className="mt-1 font-mono text-ink">asidedb</dd>
-        </div>
-        <div>
-          <dt className="text-muted">Sync model</dt>
-          <dd className="mt-1 text-ink">Local-first RxDB replication</dd>
-        </div>
-        <div>
-          <dt className="text-muted">Attachments</dt>
-          <dd className="mt-1 text-ink">
-            Server blob store, fetched on demand
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted">Logout behavior</dt>
-          <dd className="mt-1 text-ink">Keeps local notes on this device</dd>
-        </div>
-      </dl>
+    <div className="flex flex-col gap-4">
+      {error && <p className="text-sm text-danger">{error}</p>}
+
+      <div className="rounded-lg border border-divider bg-panel p-4">
+        <h3 className="text-sm font-semibold text-ink">Storage usage</h3>
+        {usage ? (
+          <UsageBreakdown usage={usage} />
+        ) : (
+          <p className="mt-2 text-sm text-muted">Loading…</p>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-divider bg-panel p-4">
+        <h3 className="text-sm font-semibold text-ink">Local data</h3>
+        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-muted">Database</dt>
+            <dd className="mt-1 font-mono text-ink">asidedb</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Sync model</dt>
+            <dd className="mt-1 text-ink">Local-first RxDB replication</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Attachments</dt>
+            <dd className="mt-1 text-ink">
+              Server blob store, fetched on demand
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted">Logout behavior</dt>
+            <dd className="mt-1 text-ink">Keeps local notes on this device</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="rounded-lg border border-divider bg-panel p-4">
+        <h3 className="text-sm font-semibold text-ink">Attachments</h3>
+        <p className="mt-1 text-sm text-muted">
+          {visible.length} file{visible.length === 1 ? "" : "s"} stored. Select to
+          delete — the file is removed from its note and the space is reclaimed on
+          the server.
+        </p>
+
+        {visible.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No attachments stored.</p>
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              {visible.map((a) => (
+                <AttachmentTile
+                  key={a.id}
+                  att={a}
+                  selected={selected.has(a.id)}
+                  onToggle={() => toggle(a.id)}
+                  onOpen={() => openImage(a)}
+                />
+              ))}
+            </div>
+
+            {selectedCount > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {confirming ? (
+                  <>
+                    <span className="text-sm text-ink">
+                      Delete {selectedCount} file
+                      {selectedCount === 1 ? "" : "s"} ({formatSize(selectedBytes)}
+                      )?
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void removeSelected()}
+                      className="rounded bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      {busy ? "Deleting…" : "Confirm delete"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setConfirming(false)}
+                      className="rounded border border-divider px-3 py-2 text-sm text-ink hover:bg-hover"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(true)}
+                    className="flex items-center gap-2 rounded bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                  >
+                    <IconTrash className="h-4 w-4" />
+                    Delete {selectedCount} selected ({formatSize(selectedBytes)})
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
+}
+
+/** The stacked-bar + per-type breakdown of storage usage. */
+function UsageBreakdown({ usage }: { usage: StorageUsage }) {
+  const totalBytes = usage.blobs.total.bytes;
+  const textBytes =
+    usage.text.messages + usage.text.channels + usage.text.embeds;
+
+  return (
+    <div className="mt-3 flex flex-col gap-3">
+      <div className="flex h-2 overflow-hidden rounded-full bg-rail">
+        {usage.blobs.byCategory.map((c) =>
+          c.bytes > 0 && totalBytes > 0 ? (
+            <span
+              key={c.category}
+              style={{
+                width: `${(c.bytes / totalBytes) * 100}%`,
+                backgroundColor: CATEGORY_COLOR[c.category],
+              }}
+            />
+          ) : null,
+        )}
+      </div>
+
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        {usage.blobs.byCategory.map((c) => (
+          <div
+            key={c.category}
+            className="flex items-center justify-between gap-2"
+          >
+            <dt className="flex items-center gap-2 text-muted">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: CATEGORY_COLOR[c.category] }}
+              />
+              {CATEGORY_LABELS[c.category]}
+              <span className="text-xs">({c.count})</span>
+            </dt>
+            <dd className="text-ink">{formatSize(c.bytes)}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="flex items-center justify-between border-t border-divider pt-2 text-sm">
+        <span className="font-medium text-ink">Attachments total</span>
+        <span className="font-medium text-ink">
+          {formatSize(totalBytes)} · {usage.blobs.total.count} file
+          {usage.blobs.total.count === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-sm text-muted">
+        <span>Text (notes, channels, links)</span>
+        <span>{formatSize(textBytes)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** One selectable attachment in the storage grid. */
+function AttachmentTile({
+  att,
+  selected,
+  onToggle,
+  onOpen,
+}: {
+  att: RxDocument<AttachmentDoc>;
+  selected: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+}) {
+  const isImage = att.mimeType.startsWith("image/");
+  return (
+    <div
+      className={`relative overflow-hidden rounded-lg border bg-rail ${
+        selected ? "border-accent ring-1 ring-accent" : "border-divider"
+      }`}
+    >
+      <label className="absolute left-2 top-2 z-10 flex cursor-pointer rounded bg-panel/80 p-0.5 shadow-sm">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          aria-label={`Select ${att.fileName}`}
+          className="h-4 w-4 cursor-pointer accent-accent"
+        />
+      </label>
+
+      {isImage ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="block aspect-square w-full cursor-zoom-in"
+        >
+          <img
+            src={thumbUrl(att.blobHash, 400)}
+            alt={att.fileName}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex aspect-square w-full flex-col items-center justify-center gap-2 text-muted"
+        >
+          <IconFile className="h-8 w-8" />
+          <span className="px-2 text-center text-[11px] uppercase">
+            {extension(att.fileName, att.mimeType)}
+          </span>
+        </button>
+      )}
+
+      <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+        <span
+          className="min-w-0 truncate text-xs text-ink"
+          title={att.fileName}
+        >
+          {att.fileName}
+        </span>
+        <span className="shrink-0 text-[11px] text-muted">
+          {formatSize(att.size)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Best-effort file extension for the non-image tile label. */
+function extension(fileName: string, mimeType: string): string {
+  const dot = fileName.lastIndexOf(".");
+  if (dot >= 0 && dot < fileName.length - 1) return fileName.slice(dot + 1);
+  const slash = mimeType.indexOf("/");
+  return slash >= 0 ? mimeType.slice(slash + 1) : "file";
 }
 
 function NotificationSettings() {

@@ -30,3 +30,13 @@ export async function uploadBlob(file: File): Promise<UploadedBlob> {
 export function blobUrl(hash: string): string {
   return authUrl(`/api/blobs/${hash}`);
 }
+
+/**
+ * URL for a resized WebP preview of an image blob (generated + cached server
+ * side). Use this for inline cards and grids; keep {@link blobUrl} for the
+ * full-resolution lightbox. The server snaps `width` to a small allowlist and
+ * redirects non-image blobs to the original, so this is always safe to use.
+ */
+export function thumbUrl(hash: string, width = 400): string {
+  return authUrl(`/api/blobs/${hash}/thumbnail?w=${width}`);
+}

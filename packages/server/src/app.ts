@@ -15,7 +15,10 @@ import {
 } from "./ai/index.js";
 import { createAuthMiddleware, registerAuthRoutes } from "./auth/index.js";
 import { getBlobDriver, sha256 } from "./blobs/index.js";
+import { runBlobGc } from "./blobs/gc.js";
+import { clampThumbnailWidth, getOrCreateThumbnail } from "./blobs/thumbnails.js";
 import { db } from "./db/index.js";
+import { getStorageUsage } from "./storage/usage.js";
 import {
   createFeed,
   deleteFeed,
@@ -36,6 +39,8 @@ import { embedsSync } from "./sync/embeds.js";
 import { messagesSync } from "./sync/messages.js";
 import { pull } from "./sync/pull.js";
 import { push, type PushRow } from "./sync/push.js";
+import { attachmentRowToDoc } from "./sync/row.js";
+import { writeServerBatch } from "./sync/server-write.js";
 import { onChange } from "./sync/stream.js";
 
 // Relative to cwd; the Docker runtime sets WORKDIR /app and STATIC_DIR=./public.
@@ -72,6 +77,7 @@ export function createApp(): Hono {
   registerSyncRoutes(app, configSync);
 
   registerBlobRoutes(app);
+  registerStorageRoutes(app);
   registerFeedRoutes(app);
   registerAiRoutes(app);
 
@@ -197,6 +203,65 @@ function registerBlobRoutes(app: Hono): void {
         "cache-control": "public, max-age=31536000, immutable",
       },
     });
+  });
+
+  // A resized WebP preview of an image blob, generated and cached on first hit
+  // (ATT-4). `?w=` snaps to a small allowlist of widths. Non-image / undecodable
+  // sources redirect to the original so an `<img>` still resolves.
+  app.get("/api/blobs/:hash/thumbnail", async (c) => {
+    const hash = c.req.param("hash");
+    const width = clampThumbnailWidth(Number(c.req.query("w")));
+    const thumb = await getOrCreateThumbnail(hash, width);
+    if (!thumb) return c.redirect(`/api/blobs/${hash}`, 302);
+
+    return new Response(new Uint8Array(thumb.bytes), {
+      headers: {
+        "content-type": thumb.contentType,
+        "content-length": String(thumb.bytes.byteLength),
+        // Keyed by the source hash + a fixed width set, so this is immutable too.
+        "cache-control": "public, max-age=31536000, immutable",
+      },
+    });
+  });
+}
+
+/**
+ * Storage API. Read-only usage breakdown plus a bulk-delete used by the Storage
+ * settings page. Deletes are applied server-authoritatively so every client
+ * converges through the normal attachments sync stream, then orphaned blobs are
+ * swept right away so reclaimed space shows up immediately.
+ */
+function registerStorageRoutes(app: Hono): void {
+  app.get("/api/storage/usage", async (c) => c.json(await getStorageUsage()));
+
+  app.post("/api/storage/attachments/delete", async (c) => {
+    const body = await c.req
+      .json<{ ids?: string[] }>()
+      .catch(() => ({}) as { ids?: string[] });
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((id): id is string => typeof id === "string")
+      : [];
+    if (ids.length === 0) return c.json({ deleted: 0, bytesReclaimed: 0 });
+
+    const rows = await db
+      .selectFrom("attachments")
+      .selectAll()
+      .where("id", "in", ids)
+      .where("deleted", "=", 0)
+      .execute();
+
+    const now = Date.now();
+    const docs = rows.map((row) => ({
+      ...attachmentRowToDoc(row),
+      updatedAt: now,
+      _deleted: true,
+    }));
+    await writeServerBatch(attachmentsSync, docs);
+
+    // Reclaim the blobs those attachments were pinning (subject to the GC grace
+    // period; very recent uploads are caught by the next scheduled sweep).
+    const gc = await runBlobGc();
+    return c.json({ deleted: docs.length, bytesReclaimed: gc.bytesReclaimed });
   });
 }
 

@@ -483,6 +483,15 @@ export function MessageList({
       return;
     }
 
+    // The message is being fully removed (not just detached from one channel),
+    // so soft-delete its attachments too. Otherwise the attachment rows live on
+    // forever, pinning their blobs against garbage collection. The find() sub
+    // above excludes soft-deleted docs, so the cards drop on the next emit.
+    for (const a of attachmentsByMessage.get(doc.id) ?? []) {
+      const bumpedAtt = await a.incrementalPatch({ updatedAt: Date.now() });
+      await bumpedAtt.remove();
+    }
+
     // Bump updatedAt so the soft-delete wins timestamp-based conflict handling,
     // then remove() the returned (new-revision) doc — not the stale reference.
     const bumped = await doc.incrementalPatch({ updatedAt: Date.now() });

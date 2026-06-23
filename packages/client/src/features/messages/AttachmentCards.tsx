@@ -1,7 +1,8 @@
 import type { AttachmentDoc } from "@aside/shared";
 import type { RxDocument } from "rxdb";
 import IconPaperclip from "~icons/lucide/paperclip";
-import { blobUrl } from "../attachments/api";
+import { blobUrl, thumbUrl } from "../attachments/api";
+import { formatSize } from "../storage/format";
 
 /**
  * Renders a message's attachments below its body (ATT-3): images as inline
@@ -29,7 +30,7 @@ export function AttachmentCards({
               className="block cursor-zoom-in"
             >
               <img
-                src={blobUrl(a.blobHash)}
+                src={thumbUrl(a.blobHash)}
                 alt={a.fileName}
                 loading="lazy"
                 className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
@@ -44,7 +45,7 @@ export function AttachmentCards({
               className="block"
             >
               <img
-                src={blobUrl(a.blobHash)}
+                src={thumbUrl(a.blobHash)}
                 alt={a.fileName}
                 loading="lazy"
                 className="max-h-80 max-w-xs rounded-xl border border-divider object-cover"
@@ -69,10 +70,4 @@ export function AttachmentCards({
       )}
     </div>
   );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

@@ -172,6 +172,30 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("created_at", "integer", (c) => c.notNull())
     .execute();
 
+  // Server-only thumbnail cache: maps an image blob + requested width to a
+  // derived thumbnail, which is itself a normal blob (so it's served and
+  // garbage-collected by the same machinery). Generated lazily on first request.
+  // Not synced (no seq / deleted).
+  await db.schema
+    .createTable("blob_thumbnails")
+    .ifNotExists()
+    .addColumn("source_hash", "text", (c) => c.notNull())
+    .addColumn("width", "integer", (c) => c.notNull())
+    .addColumn("thumb_hash", "text", (c) => c.notNull())
+    .addColumn("thumb_width", "integer", (c) => c.notNull())
+    .addColumn("thumb_height", "integer", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addPrimaryKeyConstraint("blob_thumbnails_pk", ["source_hash", "width"])
+    .execute();
+
+  // GC reverse-lookup: keep a thumbnail alive iff its source is still referenced.
+  await db.schema
+    .createIndex("blob_thumbnails_thumb_hash")
+    .ifNotExists()
+    .on("blob_thumbnails")
+    .column("thumb_hash")
+    .execute();
+
   // Server-only feed configuration. Not part of the sync protocol (no seq /
   // deleted); it just persists each feed's source, schedule, cursor, and status.
   await db.schema

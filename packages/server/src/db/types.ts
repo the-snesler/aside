@@ -133,6 +133,26 @@ export interface BlobsTable {
 }
 
 /**
+ * Server-only thumbnail cache. NOT synced (no `seq`/`deleted`). Maps a source
+ * image blob and a requested width — the `(source_hash, width)` pair is the
+ * primary key — to a derived thumbnail. The thumbnail's bytes are themselves a
+ * content-addressed blob (`thumb_hash`) stored via the blob driver and recorded
+ * in {@link BlobsTable}, so they download and garbage-collect like any other blob.
+ */
+export interface BlobThumbnailsTable {
+  /** sha256 hex of the original image blob */
+  source_hash: string;
+  /** requested thumbnail width in px */
+  width: number;
+  /** sha256 hex of the generated thumbnail blob */
+  thumb_hash: string;
+  /** actual output dimensions */
+  thumb_width: number;
+  thumb_height: number;
+  created_at: number;
+}
+
+/**
  * Server-only feed configuration. NOT synced through RxDB — credentials and
  * per-source state must never enter the sync stream — so it has no `seq`/
  * `deleted`. `config` and `cursor` are JSON-encoded text blobs.
@@ -255,6 +275,7 @@ export interface Database {
   og_cache: OgCacheTable;
   attachments: AttachmentsTable;
   blobs: BlobsTable;
+  blob_thumbnails: BlobThumbnailsTable;
   feed_sources: FeedSourcesTable;
   ai_config: AiConfigTable;
   ai_message_state: AiMessageStateTable;

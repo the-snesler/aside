@@ -331,6 +331,7 @@ function Workspace({
             <SettingsPage
               channels={db.channels}
               config={db.config}
+              attachments={db.attachments}
               onOpenMenu={() => setSidebarOpen(true)}
               onFeedsChanged={reloadFeeds}
             />
