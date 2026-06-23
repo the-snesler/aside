@@ -6,7 +6,7 @@
 FROM node:24-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
-# Puppeteer (Twitter feed source): skip the chromium download during install —
+# Puppeteer (Twitter feed source): skip the chromium download during install -
 # the runtime stage installs the browser + its OS deps once, into this shared
 # cache dir, which puppeteer.launch() reads at run time.
 ENV PUPPETEER_SKIP_DOWNLOAD=1

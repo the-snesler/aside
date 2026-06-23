@@ -184,3 +184,4 @@ Run from the repo root:
 ## Frontend Guidance
 
 - For anchored popups, menus, and floating panels in the client, use `@floating-ui/react` instead of hand-positioned absolute elements. Reuse the local pattern with `useFloating`, `autoUpdate`, `offset`, `flip`, `shift`, `useDismiss`, `useRole`, and `FloatingPortal` so overlays stay correctly positioned and dismissible across desktop and mobile layouts.
+- No em-dashes in UI copy.

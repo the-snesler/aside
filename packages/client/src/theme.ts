@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ConfigCollection } from "./db/database";
+import { clamp, hexToHsl, hslToHex, rotateHue } from "./colorMath";
 
 /**
  * The theme palette as a flat color map. Keys are the Tailwind token names from
@@ -61,9 +62,116 @@ export const DARK_THEME: ThemePalette = {
 };
 
 /**
+ * The mode-fixed, near-neutral tokens — surfaces, text, overlays, danger. They
+ * don't follow the picked color: light/dark mode picks this base, and
+ * {@link derivePalette} layers the hue-driven tokens (accent, gradient, sidebar,
+ * active) on top.
+ */
+const NEUTRAL_KEYS = [
+  "rail",
+  "chat",
+  "panel",
+  "hover",
+  "divider",
+  "ink",
+  "muted",
+  "danger",
+] as const;
+
+const neutralsFrom = (theme: ThemePalette): ThemePalette =>
+  Object.fromEntries(
+    NEUTRAL_KEYS.map((key) => [key, theme[key]]),
+  ) as ThemePalette;
+
+export const LIGHT_NEUTRALS: ThemePalette = neutralsFrom(DEFAULT_THEME);
+export const DARK_NEUTRALS: ThemePalette = neutralsFrom(DARK_THEME);
+
+/** Harmony schemes: hue offsets (degrees) for the three gradient stops. */
+export const HARMONIES = {
+  analogous: [0, 30, -30],
+  complementary: [0, 180, 150],
+  triadic: [0, 120, 240],
+} as const;
+
+export type Harmony = keyof typeof HARMONIES;
+
+export const HARMONY_LABELS: Record<Harmony, string> = {
+  analogous: "Analogous",
+  complementary: "Complementary",
+  triadic: "Triadic",
+};
+
+/** The minimal description a generated theme needs. */
+export interface ThemeRecipe {
+  /** Primary / brand color as `#rrggbb`. */
+  primary: string;
+  mode: "light" | "dark";
+  harmony: Harmony;
+}
+
+/** Reorder a palette to {@link DEFAULT_THEME}'s key order so two equal palettes
+ * stringify identically (the preset-active check compares JSON). */
+const inCanonicalOrder = (palette: ThemePalette): ThemePalette =>
+  Object.fromEntries(
+    Object.keys(DEFAULT_THEME).map((key) => [key, palette[key]]),
+  ) as ThemePalette;
+
+/**
+ * Build a full {@link ThemePalette} from a single primary color, a light/dark
+ * mode, and a harmony scheme. The primary becomes the `accent`; its hue is
+ * rotated by the harmony offsets to fill the three-stop background gradient; the
+ * sidebar and active tokens get a soft tint of the same hue; everything else
+ * comes from the mode's neutral base. Rendered in HSL so lightness tracks the
+ * mode (pastel in light, deep in dark) regardless of the input color.
+ */
+export function derivePalette({
+  primary,
+  mode,
+  harmony,
+}: ThemeRecipe): ThemePalette {
+  const { h, s } = hexToHsl(primary);
+  const [o1, o2, o3] = HARMONIES[harmony];
+  const dark = mode === "dark";
+  // Gradient saturation tracks the pick but stays in a pleasant band.
+  const gradS = clamp(s * 0.75, 0.25, 0.6);
+  const gradL = dark ? 0.2 : 0.85;
+  const grad = (off: number) => hslToHex(rotateHue(h, off), gradS, gradL);
+  return inCanonicalOrder({
+    ...(dark ? DARK_NEUTRALS : LIGHT_NEUTRALS),
+    accent: hslToHex(h, clamp(s, 0.45, 0.92), dark ? 0.62 : 0.56),
+    grad1: grad(o1),
+    grad2: grad(o2),
+    grad3: grad(o3),
+    sidebar: hslToHex(h, dark ? 0.16 : 0.34, dark ? 0.12 : 0.94),
+    active: hslToHex(h, dark ? 0.28 : 0.42, dark ? 0.2 : 0.86),
+  });
+}
+
+/**
+ * Best-effort inverse of {@link derivePalette}, used to seed the picker from the
+ * palette already in effect. The harmony can't be recovered from the result, so
+ * it defaults to analogous; mode is read from the feed-surface lightness.
+ */
+export function recipeFromPalette(palette: ThemePalette): ThemeRecipe {
+  return {
+    primary: palette.accent,
+    mode:
+      hexToHsl(palette.chat ?? DEFAULT_THEME.chat).l < 0.5 ? "dark" : "light",
+    harmony: "analogous",
+  };
+}
+
+const preset = (id: string, label: string, recipe: ThemeRecipe) => ({
+  id,
+  label,
+  palette: derivePalette(recipe),
+});
+
+/**
  * Selectable theme presets shown as swatch tiles in Appearance settings.
- * "Light" and "Dark" are the canonical modes; the rest are colorful variants
- * built by retinting a base palette's gradient + accent.
+ * "Light" and "Dark" are the canonical hand-tuned modes; "Ocean"/"Forest" are
+ * hand-tuned variants; the rest are generated from a recipe via
+ * {@link derivePalette} — the same engine the custom picker uses.
  */
 export const THEME_PRESETS: Array<{
   id: string;
@@ -97,6 +205,46 @@ export const THEME_PRESETS: Array<{
       accent: "#2f9e57",
     },
   },
+  preset("rose", "Rose", {
+    primary: "#e8478f",
+    mode: "light",
+    harmony: "analogous",
+  }),
+  preset("sunset", "Sunset", {
+    primary: "#f0883e",
+    mode: "light",
+    harmony: "complementary",
+  }),
+  preset("amber", "Amber", {
+    primary: "#f0b232",
+    mode: "light",
+    harmony: "analogous",
+  }),
+  preset("sky", "Sky", {
+    primary: "#3b9eff",
+    mode: "light",
+    harmony: "triadic",
+  }),
+  preset("mint", "Mint", {
+    primary: "#2dd4bf",
+    mode: "light",
+    harmony: "triadic",
+  }),
+  preset("grape", "Grape", {
+    primary: "#a855f7",
+    mode: "dark",
+    harmony: "analogous",
+  }),
+  preset("ember", "Ember", {
+    primary: "#f0553e",
+    mode: "dark",
+    harmony: "complementary",
+  }),
+  preset("indigo", "Indigo", {
+    primary: "#5865f2",
+    mode: "dark",
+    harmony: "triadic",
+  }),
 ];
 
 /** Quick-pick accent swatches for the accent color picker. */

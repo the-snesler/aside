@@ -2,7 +2,7 @@
 
 ## Aside
 
-Aside is a local-first notetaking app. Sometimes, when you just want to save an idea, link, or quote for later, the last thing you want to do is manage a heap of Markdown files or file your document in just the right place; you just want to paste the link, or write a sentence, and move on with your day. Aside lets you take quick notes while giving you the tools to organize them later, if you want.
+Aside is a local-first notetaking app. Sometimes, when you just want to save an idea, link, or quote for later, the last thing you want to do is manage a heap of Markdown files or organize your documents in just the right place; you just want to paste the link, or write the sentence, and move on with your day. Aside lets you take quick notes while giving you the tools to organize them later, if you want.
 
 ### Features
 

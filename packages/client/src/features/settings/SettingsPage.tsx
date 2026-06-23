@@ -19,7 +19,6 @@ import {
 } from "../storage/api";
 import { formatSize } from "../storage/format";
 import {
-  ACCENT_PRESETS,
   applyTheme,
   DEFAULT_THEME,
   HEX_TOKENS,
@@ -31,6 +30,8 @@ import {
 } from "../../theme";
 import { AiSettings } from "../ai/AiSettings";
 import { FeedSettings } from "../feeds/FeedSettings";
+import { Segmented } from "./Segmented";
+import { ThemeStudio } from "./ThemeStudio";
 import IconBell from "~icons/lucide/bell";
 import IconDatabase from "~icons/lucide/database";
 import IconFile from "~icons/lucide/file";
@@ -212,7 +213,7 @@ function AppearanceSettings({ config }: { config: ConfigCollection }) {
       <div className="rounded-lg border border-divider bg-panel p-4">
         <h3 className="text-sm font-semibold text-ink">Theme</h3>
         <p className="mt-1 text-sm text-muted">
-          Pick a preset, then fine-tune the accent. Themes sync to every device.
+          Pick a preset, or build your own below. Themes sync to every device.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {THEME_PRESETS.map((preset) => (
@@ -235,40 +236,8 @@ function AppearanceSettings({ config }: { config: ConfigCollection }) {
         </div>
       </div>
 
-      {/* Accent color */}
-      <div className="rounded-lg border border-divider bg-panel p-4">
-        <h3 className="text-sm font-semibold text-ink">Accent color</h3>
-        <p className="mt-1 text-sm text-muted">
-          Used for buttons, links, and the active state.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            type="color"
-            aria-label="Accent color"
-            value={palette.accent}
-            // Live-preview while dragging; persist on commit.
-            onInput={(e) =>
-              applyTheme({ ...palette, accent: e.currentTarget.value })
-            }
-            onChange={(e) => setToken("accent", e.currentTarget.value)}
-            className="h-9 w-12 cursor-pointer rounded border border-divider bg-rail"
-          />
-          {ACCENT_PRESETS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              aria-label={`Use accent ${color}`}
-              onClick={() => setToken("accent", color)}
-              className={`h-7 w-7 rounded-full border transition hover:scale-110 ${
-                palette.accent.toLowerCase() === color.toLowerCase()
-                  ? "border-ink ring-2 ring-accent"
-                  : "border-divider"
-              }`}
-              style={{ backgroundColor: color }}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Custom theme picker */}
+      <ThemeStudio config={config} palette={palette} />
 
       {/* Advanced per-token editor */}
       <details className="rounded-lg border border-divider bg-panel p-4">
@@ -375,41 +344,6 @@ function PresetSwatch({ palette }: { palette: ThemePalette }) {
   );
 }
 
-/** A segmented (radio-style) control for a small set of options. */
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: Array<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-ink">{label}</span>
-      <div className="inline-flex w-fit rounded-lg border border-divider bg-rail p-0.5">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={`rounded-md px-3 py-1.5 text-sm transition ${
-              value === option.value
-                ? "bg-accent font-medium text-white"
-                : "text-muted hover:text-ink"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const CATEGORY_LABELS: Record<BlobCategory, string> = {
   image: "Images",
   video: "Videos",
@@ -424,7 +358,11 @@ const CATEGORY_COLOR: Record<BlobCategory, string> = {
   other: "#64748b",
 };
 
-function StorageSettings({ attachments }: { attachments: AttachmentCollection }) {
+function StorageSettings({
+  attachments,
+}: {
+  attachments: AttachmentCollection;
+}) {
   const lightbox = useLightbox();
   const [usage, setUsage] = useState<StorageUsage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -548,9 +486,7 @@ function StorageSettings({ attachments }: { attachments: AttachmentCollection })
       <div className="rounded-lg border border-divider bg-panel p-4">
         <h3 className="text-sm font-semibold text-ink">Attachments</h3>
         <p className="mt-1 text-sm text-muted">
-          {visible.length} file{visible.length === 1 ? "" : "s"} stored. Select to
-          delete — the file is removed from its note and the space is reclaimed on
-          the server.
+          {visible.length} file{visible.length === 1 ? "" : "s"} stored.
         </p>
 
         {visible.length === 0 ? (
@@ -575,7 +511,8 @@ function StorageSettings({ attachments }: { attachments: AttachmentCollection })
                   <>
                     <span className="text-sm text-ink">
                       Delete {selectedCount} file
-                      {selectedCount === 1 ? "" : "s"} ({formatSize(selectedBytes)}
+                      {selectedCount === 1 ? "" : "s"} (
+                      {formatSize(selectedBytes)}
                       )?
                     </span>
                     <button
@@ -602,7 +539,8 @@ function StorageSettings({ attachments }: { attachments: AttachmentCollection })
                     className="flex items-center gap-2 rounded bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90"
                   >
                     <IconTrash className="h-4 w-4" />
-                    Delete {selectedCount} selected ({formatSize(selectedBytes)})
+                    Delete {selectedCount} selected ({formatSize(selectedBytes)}
+                    )
                   </button>
                 )}
               </div>
