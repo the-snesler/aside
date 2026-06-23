@@ -9,3 +9,12 @@ allowBuilds:
   puppeteer: true
   rxdb: false
   sharp: true
+
+minimumReleaseAgeExclude:
+  - ajv@8.18.0
+  - ws@8.20.1
+  - esbuild@0.28.1
+  - ws@8.21.0
+  - protobufjs@7.6.3
+  - hono@4.12.25
+  - undici@7.28.0

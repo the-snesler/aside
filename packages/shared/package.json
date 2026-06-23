@@ -21,11 +21,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "rxdb": "^16.21.0",
-    "tsup": "^8.3.5",
-    "typescript": "^5.6.3"
+    "rxdb": "^16.21.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   }
 }

@@ -14,7 +14,7 @@
     "@aside/shared": "workspace:*",
     "@floating-ui/react": "^0.27.19",
     "@use-gesture/react": "^10.3.1",
-    "dexie": "^4.0.10",
+    "dexie": "^4.4.3",
     "minisearch": "^7.2.0",
     "prismjs": "^1.30.0",
     "react": "^18.3.1",
@@ -24,8 +24,8 @@
     "rehype-highlight": "^7.0.2",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "rxdb": "^16.21.0",
-    "rxjs": "^7.8.1",
+    "rxdb": "^16.21.1",
+    "rxjs": "^7.8.2",
     "slate": "^0.124.1",
     "slate-history": "^0.113.1",
     "slate-react": "^0.124.2",
@@ -37,12 +37,12 @@
     "@svgr/plugin-jsx": "^8.1.0",
     "@tailwindcss/vite": "^4.3.0",
     "@types/prismjs": "^1.26.6",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
     "tailwindcss": "^4.3.0",
-    "typescript": "^5.6.3",
+    "typescript": "^5.9.3",
     "unplugin-icons": "^23.0.1",
-    "vite": "^6.0.3"
+    "vite": "^6.4.3"
   }
 }
