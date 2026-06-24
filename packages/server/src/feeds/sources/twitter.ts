@@ -21,9 +21,8 @@ const DEFAULT_MAX_ITEMS = 200;
 const STATUS_RE = /\/([^/]+)\/status\/(\d+)/;
 
 /** Raw fields pulled from each tweet article in the page context. */
-interface RawTweet {
+export interface RawTweet {
   href: string | null;
-  text: string;
   datetime: string | null;
 }
 
@@ -105,7 +104,7 @@ async function scrapeBookmarks(
   ) {
     const raws = await extractVisible(page);
     for (const raw of raws) {
-      const item = normalize(raw);
+      const item = normalizeTweet(raw);
       if (!item) continue;
       if (opts.stopAtUrl && item.url === opts.stopAtUrl) {
         reachedCursor = true;
@@ -143,30 +142,24 @@ function extractVisible(page: Page): Promise<RawTweet[]> {
       const permalink =
         article.querySelector('a[href*="/status/"]:has(time)') ??
         article.querySelector('a[href*="/status/"]');
-      const textEl = article.querySelector('[data-testid="tweetText"]');
       const timeEl = article.querySelector("time");
       return {
         href: permalink?.getAttribute("href") ?? null,
-        text: textEl?.textContent ?? "",
         datetime: timeEl?.getAttribute("datetime") ?? null,
       };
     }),
   );
 }
 
-function normalize(raw: RawTweet): FeedItem | null {
+export function normalizeTweet(raw: RawTweet): FeedItem | null {
   if (!raw.href) return null;
   const match = raw.href.match(STATUS_RE);
   if (!match) return null;
   const externalId = match[2];
   const url = `https://x.com/${match[1]}/status/${externalId}`;
-  const tweetText = raw.text.trim();
-  // Note body is the link (load-bearing for future embeds); tweet text is a
-  // free, search-friendly prefix.
-  const text = tweetText ? `${tweetText}\n\n${url}` : url;
   const parsed = raw.datetime ? Date.parse(raw.datetime) : NaN;
   const createdAt = Number.isNaN(parsed) ? Date.now() : parsed;
-  return { externalId, url, text, createdAt };
+  return { externalId, url, text: url, createdAt };
 }
 
 /**
