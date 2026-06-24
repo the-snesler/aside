@@ -9,6 +9,7 @@ import type {
   ConfigCollection,
 } from "../../db/database";
 import { useDisplay, type DisplaySettings } from "../../appearance";
+import { useIsDemo } from "../../demo";
 import { blobUrl, thumbUrl } from "../attachments/api";
 import { useLightbox } from "../lightbox/LightboxProvider";
 import {
@@ -113,6 +114,7 @@ export function SettingsPage({
 }: Props) {
   const [activeSection, setActiveSection] = useState<SectionId>("ai");
   const current = sections.find((section) => section.id === activeSection)!;
+  const isDemo = useIsDemo();
 
   return (
     <main className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat md:-ml-5 md:rounded-[28px] md:shadow-xl md:ring-1 md:ring-black/5">
@@ -171,13 +173,17 @@ export function SettingsPage({
               <p className="mt-1 text-sm text-muted">{current.description}</p>
             </div>
 
-            {activeSection === "ai" && <AiSettings />}
-            {activeSection === "feeds" && (
-              <FeedSettings
-                channels={channels}
-                onFeedsChanged={onFeedsChanged}
-              />
-            )}
+            {activeSection === "ai" &&
+              (isDemo ? <DemoDisabledNotice /> : <AiSettings />)}
+            {activeSection === "feeds" &&
+              (isDemo ? (
+                <DemoDisabledNotice />
+              ) : (
+                <FeedSettings
+                  channels={channels}
+                  onFeedsChanged={onFeedsChanged}
+                />
+              ))}
             {activeSection === "appearance" && (
               <AppearanceSettings config={config} />
             )}
@@ -185,11 +191,21 @@ export function SettingsPage({
               <StorageSettings attachments={attachments} />
             )}
             {activeSection === "notifications" && <NotificationSettings />}
-            {activeSection === "security" && <SecuritySettings />}
+            {activeSection === "security" &&
+              (isDemo ? <DemoDisabledNotice /> : <SecuritySettings />)}
           </div>
         </section>
       </div>
     </main>
+  );
+}
+
+/** Placeholder shown for settings sections that are turned off in the demo. */
+function DemoDisabledNotice() {
+  return (
+    <div className="rounded-lg border border-divider bg-panel p-4 text-sm text-muted">
+      This section is disabled in the public demo.
+    </div>
   );
 }
 

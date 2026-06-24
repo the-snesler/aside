@@ -16,8 +16,16 @@ import {
 import { createAuthMiddleware, registerAuthRoutes } from "./auth/index.js";
 import { getBlobDriver, sha256 } from "./blobs/index.js";
 import { runBlobGc } from "./blobs/gc.js";
-import { clampThumbnailWidth, getOrCreateThumbnail } from "./blobs/thumbnails.js";
+import {
+  clampThumbnailWidth,
+  getOrCreateThumbnail,
+} from "./blobs/thumbnails.js";
 import { db } from "./db/index.js";
+import {
+  DEMO_WRITABLE_COLLECTIONS,
+  demoForbidden,
+  isDemoMode,
+} from "./demo/index.js";
 import { getStorageUsage } from "./storage/usage.js";
 import {
   createFeed,
@@ -117,6 +125,11 @@ function registerSyncRoutes<TDoc extends ReplicatedDoc>(
 
   // Push: client sends changed docs; server returns conflicting master docs.
   app.post(`${base}/push`, async (c) => {
+    // In the demo, only the core collections are writable; attachments/embeds
+    // pushes are rejected (uploads are off; embeds are server-owned anyway).
+    if (isDemoMode() && !DEMO_WRITABLE_COLLECTIONS.has(coll.name)) {
+      return demoForbidden(c);
+    }
     const rows = await c.req.json<PushRow<TDoc>[]>();
     const conflicts = await push(coll, rows);
     return c.json(conflicts);
@@ -150,6 +163,8 @@ function registerSyncRoutes<TDoc extends ReplicatedDoc>(
  */
 function registerBlobRoutes(app: Hono): void {
   app.post("/api/blobs", async (c) => {
+    // Uploads are disabled in the demo: kills the bad/large-content risk class.
+    if (isDemoMode()) return demoForbidden(c);
     const declared = Number(c.req.header("content-length") ?? 0);
     if (declared > MAX_BLOB_BYTES) {
       return c.json({ error: "file too large" }, 413);
@@ -235,6 +250,7 @@ function registerStorageRoutes(app: Hono): void {
   app.get("/api/storage/usage", async (c) => c.json(await getStorageUsage()));
 
   app.post("/api/storage/attachments/delete", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const body = await c.req
       .json<{ ids?: string[] }>()
       .catch(() => ({}) as { ids?: string[] });
@@ -277,6 +293,7 @@ function registerFeedRoutes(app: Hono): void {
   app.get("/api/feeds", async (c) => c.json(await listFeeds()));
 
   app.post("/api/feeds", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const input = await c.req.json<CreateFeedInput>();
     if (!input?.type || !input?.channelName) {
       return c.json({ error: "type and channelName are required" }, 400);
@@ -287,6 +304,7 @@ function registerFeedRoutes(app: Hono): void {
   });
 
   app.patch("/api/feeds/:id", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const patch = await c.req.json<UpdateFeedInput>();
     const feed = await updateFeed(c.req.param("id"), patch);
     if (!feed) return c.json({ error: "not found" }, 404);
@@ -295,6 +313,7 @@ function registerFeedRoutes(app: Hono): void {
   });
 
   app.delete("/api/feeds/:id", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const id = c.req.param("id");
     stopFeed(id);
     await deleteFeed(id);
@@ -303,6 +322,7 @@ function registerFeedRoutes(app: Hono): void {
 
   // Manual trigger — runs the feed now, independent of its schedule.
   app.post("/api/feeds/:id/refresh", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const id = c.req.param("id");
     if (!(await getFeed(id))) return c.json({ error: "not found" }, 404);
     return c.json(await runFeedNow(id));
@@ -311,6 +331,7 @@ function registerFeedRoutes(app: Hono): void {
   // Seed/refresh the feed's auth: the body is the cookie array exported from the
   // browser (e.g. "Get cookies.txt LOCALLY").
   app.post("/api/feeds/:id/cookies", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const id = c.req.param("id");
     if (!(await getFeed(id))) return c.json({ error: "not found" }, 404);
     try {
@@ -335,6 +356,7 @@ function registerAiRoutes(app: Hono): void {
   app.get("/api/ai/config", async (c) => c.json(await getAiConfigPublic()));
 
   app.patch("/api/ai/config", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     const body = await c.req.json<UpdateAiConfigInput>().catch(() => ({}));
     await updateAiConfig(sanitizeAiPatch(body));
     // Re-apply: restart the describer cron and backfill if a bot was just enabled.
@@ -344,11 +366,13 @@ function registerAiRoutes(app: Hono): void {
 
   // Manual triggers, independent of the live stream / cron.
   app.post("/api/ai/reorganize", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     await backfillOrganize();
     return c.json({ ok: true });
   });
 
   app.post("/api/ai/redescribe", async (c) => {
+    if (isDemoMode()) return demoForbidden(c);
     void redescribeAll();
     return c.json({ ok: true });
   });

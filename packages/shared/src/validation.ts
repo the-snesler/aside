@@ -15,7 +15,10 @@ import type {
 export const messageDocSchema: z.ZodType<ReplicatedMessageDoc> = z.object({
   id: z.string().min(1).max(64),
   channelIds: z.array(z.string().min(1).max(64)).min(1),
-  text: z.string(),
+  // Bounded as defense-in-depth: a synced note is a quick capture, never a
+  // megabyte of text. The cap is generous enough never to bite a real note, but
+  // stops a writable public demo (or a buggy client) from bloating the DB.
+  text: z.string().max(100_000),
   createdAt: z.number(),
   updatedAt: z.number(),
   _deleted: z.boolean(),

@@ -20,6 +20,7 @@ import {
 import { channelColor, nextSortOrder, sortChannels } from "./channelMeta";
 import { slugifyChannelName } from "./channelName";
 import LogoWide from "../../LogoWide";
+import { useIsDemo } from "../../demo";
 
 // Dropping a note onto a channel button files it there; MessageRow stamps the
 // dragged note's id onto the dataTransfer under this MIME type.
@@ -51,6 +52,7 @@ export function ChannelSidebar({
   onLogout,
   onDropMessage,
 }: Props) {
+  const isDemo = useIsDemo();
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -154,15 +156,17 @@ export function ChannelSidebar({
           >
             <IconSettings className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={onLogout}
-            aria-label="Log out"
-            title="Log out"
-            className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
-          >
-            <IconLogOut className="h-4 w-4" />
-          </button>
+          {!isDemo && (
+            <button
+              type="button"
+              onClick={onLogout}
+              aria-label="Log out"
+              title="Log out"
+              className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+            >
+              <IconLogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -189,10 +193,11 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => onSelect(id)}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? "bg-active text-ink shadow-sm"
-                    : "text-ink/80 hover:bg-hover"
-                    }`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-active text-ink shadow-sm"
+                      : "text-ink/80 hover:bg-hover"
+                  }`}
                 >
                   <Icon
                     className={`h-4 w-4 ${active ? "text-accent" : "text-muted"}`}
@@ -235,8 +240,9 @@ export function ChannelSidebar({
                 ) : (
                   <div
                     draggable
-                    className={`group relative rounded-xl transition-opacity ${dropTargetId === doc.id ? "ring-2 ring-accent" : ""
-                      } ${dragChannelId === doc.id ? "opacity-40" : ""}`}
+                    className={`group relative rounded-xl transition-opacity ${
+                      dropTargetId === doc.id ? "ring-2 ring-accent" : ""
+                    } ${dragChannelId === doc.id ? "opacity-40" : ""}`}
                     onDragStart={(e) => {
                       e.dataTransfer.setData(CHANNEL_DRAG_TYPE, doc.id);
                       e.dataTransfer.effectAllowed = "move";
@@ -263,7 +269,7 @@ export function ChannelSidebar({
                             : "bottom";
                         const next =
                           dragChannelId &&
-                            computeReorder(dragChannelId, doc.id, edge)
+                          computeReorder(dragChannelId, doc.id, edge)
                             ? { id: doc.id, edge }
                             : null;
                         setDropEdge(next);
@@ -299,8 +305,9 @@ export function ChannelSidebar({
                     {dropEdge?.id === doc.id && (
                       <span
                         aria-hidden="true"
-                        className={`pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full bg-accent ${dropEdge.edge === "top" ? "-top-0.5" : "-bottom-0.5"
-                          }`}
+                        className={`pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full bg-accent ${
+                          dropEdge.edge === "top" ? "-top-0.5" : "-bottom-0.5"
+                        }`}
                       />
                     )}
                     <button
@@ -310,10 +317,11 @@ export function ChannelSidebar({
                         setEditingId(doc.id);
                         setEditDraft(doc.name);
                       }}
-                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${active
-                        ? "bg-active text-ink shadow-sm"
-                        : "hover:bg-hover"
-                        }`}
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${
+                        active
+                          ? "bg-active text-ink shadow-sm"
+                          : "hover:bg-hover"
+                      }`}
                       title={
                         doc.description ||
                         "Click to open · double-click to rename"

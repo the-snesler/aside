@@ -9,6 +9,7 @@ import {
 } from "node:crypto";
 import { db as defaultDb } from "../db/index.js";
 import type { Database } from "../db/types.js";
+import { isDemoMode } from "../demo/index.js";
 
 const OWNER_ID = "owner";
 const TOKEN_BYTES = 32;
@@ -18,6 +19,8 @@ const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 } as const;
 export interface AuthStatus {
   setupRequired: boolean;
   authenticated: boolean;
+  /** Present + true only when the server is running as a public demo. */
+  demo?: boolean;
 }
 
 export interface AuthTokenResponse {
@@ -38,6 +41,14 @@ export function registerAuthRoutes(
   database: Kysely<Database> = defaultDb,
 ): void {
   app.get("/api/auth/status", async (c) => {
+    // Demo mode: no owner, no login — every visitor is "in".
+    if (isDemoMode()) {
+      return c.json<AuthStatus>({
+        setupRequired: false,
+        authenticated: true,
+        demo: true,
+      });
+    }
     const token = readToken(c);
     const setupRequired = !(await hasOwner(database));
     const authenticated = token
@@ -47,6 +58,7 @@ export function registerAuthRoutes(
   });
 
   app.post("/api/auth/setup", async (c) => {
+    if (isDemoMode()) return c.json({ error: "disabled in demo" }, 403);
     const password = await readPassword(c);
     if (!password) return c.json({ error: "password is required" }, 400);
     if (await hasOwner(database)) {
@@ -65,6 +77,7 @@ export function registerAuthRoutes(
   });
 
   app.post("/api/auth/login", async (c) => {
+    if (isDemoMode()) return c.json({ error: "disabled in demo" }, 403);
     const password = await readPassword(c);
     if (!password) return c.json({ error: "password is required" }, 400);
     const token = await login(database, password, metaFromContext(c));
@@ -80,6 +93,7 @@ export function registerAuthRoutes(
   });
 
   app.post("/api/auth/password", async (c) => {
+    if (isDemoMode()) return c.json({ error: "disabled in demo" }, 403);
     const token = readToken(c);
     if (!token || !(await validateSession(database, token))) {
       return c.json({ error: "unauthorized" }, 401);
@@ -115,6 +129,12 @@ export function createAuthMiddleware(
 ): MiddlewareHandler {
   return async (c, next) => {
     if (c.req.path.startsWith("/api/auth/")) {
+      return next();
+    }
+
+    // Demo mode: the workspace is public, so every request is authorized. The
+    // per-route demo guards still block the risky mutations (uploads, feeds, AI).
+    if (isDemoMode()) {
       return next();
     }
 

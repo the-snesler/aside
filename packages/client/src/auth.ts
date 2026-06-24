@@ -4,6 +4,8 @@ const AUTH_LOST_EVENT = "aside-auth-lost";
 export interface AuthStatus {
   setupRequired: boolean;
   authenticated: boolean;
+  /** Present + true only when the server is running as a public demo. */
+  demo?: boolean;
 }
 
 interface TokenResponse {
@@ -85,7 +87,10 @@ export async function authFetch(
   }
 
   const res = await fetch(input, { ...init, headers });
-  if (res.status === 401 || res.status === 403) {
+  // Only 401 means "session lost" → drop the token and bounce to login. A 403 is
+  // "authenticated but not allowed here" (e.g. an action disabled in the demo),
+  // which must not clear the session or trap a passwordless demo visitor.
+  if (res.status === 401) {
     clearAuthToken();
     window.dispatchEvent(new Event(AUTH_LOST_EVENT));
   }

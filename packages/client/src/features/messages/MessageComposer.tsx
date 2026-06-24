@@ -3,6 +3,7 @@ import IconArrowUp from "~icons/lucide/arrow-up";
 import IconImage from "~icons/lucide/image";
 import IconPaperclip from "~icons/lucide/paperclip";
 import IconX from "~icons/lucide/x";
+import { useIsDemo } from "../../demo";
 import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 import type { PendingAttachment } from "./types";
 import { useIsTouch } from "./useIsTouch";
@@ -33,6 +34,7 @@ export function MessageComposer({
   onSend,
 }: Props) {
   const isTouch = useIsTouch();
+  const isDemo = useIsDemo();
   return (
     <div className="shrink-0 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pb-4">
       {pending.length > 0 && (
@@ -68,25 +70,30 @@ export function MessageComposer({
         </div>
       )}
       <div className="flex items-end gap-2 rounded-2xl bg-panel px-2.5 py-2 shadow-lg ring-1 ring-divider">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          hidden
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            if (files.length) onAddFiles(files);
-            e.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach files"
-          className="shrink-0 rounded-lg p-2 text-muted transition-colors hover:bg-hover hover:text-ink"
-        >
-          <IconImage className="h-5 w-5" />
-        </button>
+        {/* Uploads are disabled in the public demo, so the attach control is hidden. */}
+        {!isDemo && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) onAddFiles(files);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach files"
+              className="shrink-0 rounded-lg p-2 text-muted transition-colors hover:bg-hover hover:text-ink"
+            >
+              <IconImage className="h-5 w-5" />
+            </button>
+          </>
+        )}
         <div className="min-w-0 flex-1 self-center">
           <MarkdownEditor
             key={composerKey}
@@ -97,7 +104,7 @@ export function MessageComposer({
             channels={channels}
             submitOnEnter={!isTouch}
             onSubmit={(t) => onSend(t)}
-            onAddFiles={onAddFiles}
+            onAddFiles={isDemo ? () => {} : onAddFiles}
             className="max-h-[40vh] w-full overflow-y-auto bg-transparent text-ink outline-none"
           />
         </div>

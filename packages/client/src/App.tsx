@@ -13,6 +13,8 @@ import {
 } from "./auth";
 import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
+import { DemoContext, useIsDemo } from "./demo";
+import IconInfo from "~icons/lucide/info";
 import { ChannelSidebar } from "./features/channels/ChannelSidebar";
 import { ChannelSettingsPage } from "./features/channels/ChannelSettingsPage";
 import { addMessageChannel } from "./features/channels/membership";
@@ -37,6 +39,7 @@ export function App() {
   const [authMode, setAuthMode] = useState<AuthMode>(() =>
     getAuthToken() ? "app" : "checking",
   );
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -48,6 +51,7 @@ export function App() {
         try {
           const status = await getAuthStatus();
           if (!active) return;
+          if (status.demo) setDemo(true);
           if (!status.authenticated) {
             clearAuthToken();
             stopReplication();
@@ -62,6 +66,12 @@ export function App() {
       try {
         const status = await getAuthStatus();
         if (!active) return;
+        // A demo server reports authenticated with no password — go straight in.
+        if (status.authenticated) {
+          setDemo(!!status.demo);
+          setAuthMode("app");
+          return;
+        }
         setAuthMode(status.setupRequired ? "setup" : "login");
       } catch {
         if (active) setAuthMode("unreachable");
@@ -90,33 +100,38 @@ export function App() {
     setAuthMode("checking");
     void getAuthStatus()
       .then((status) => {
+        if (status.authenticated) {
+          setDemo(!!status.demo);
+          setAuthMode("app");
+          return;
+        }
         setAuthMode(status.setupRequired ? "setup" : "login");
       })
       .catch(() => setAuthMode("unreachable"));
   }
 
-  if (authMode !== "app") {
-    return (
-      <AuthScreen
-        mode={authMode}
-        onRetry={retryAuth}
-        onAuthenticated={() => {
-          stopReplication();
-          setAuthMode("app");
-        }}
-      />
-    );
-  }
-
   return (
-    <AuthedApp
-      onLogout={() => {
-        void logout().finally(() => {
-          stopReplication();
-          setAuthMode("login");
-        });
-      }}
-    />
+    <DemoContext.Provider value={demo}>
+      {authMode !== "app" ? (
+        <AuthScreen
+          mode={authMode}
+          onRetry={retryAuth}
+          onAuthenticated={() => {
+            stopReplication();
+            setAuthMode("app");
+          }}
+        />
+      ) : (
+        <AuthedApp
+          onLogout={() => {
+            void logout().finally(() => {
+              stopReplication();
+              setAuthMode("login");
+            });
+          }}
+        />
+      )}
+    </DemoContext.Provider>
   );
 }
 
@@ -156,6 +171,8 @@ function AuthedApp({ onLogout }: { onLogout: () => void }) {
   // Apply per-device display prefs (density, text size, motion) from localStorage.
   useDisplay();
 
+  const isDemo = useIsDemo();
+
   if (!db) {
     return (
       <div className="flex h-full items-center justify-center text-muted">
@@ -165,7 +182,25 @@ function AuthedApp({ onLogout }: { onLogout: () => void }) {
   }
 
   return (
-    <Workspace db={db} view={view} onSelect={setView} onLogout={onLogout} />
+    <div className="flex h-full flex-col">
+      {isDemo && <DemoBanner />}
+      <div className="min-h-0 flex-1">
+        <Workspace db={db} view={view} onSelect={setView} onLogout={onLogout} />
+      </div>
+    </div>
+  );
+}
+
+/** A thin strip telling demo visitors what's live and what's off. */
+function DemoBanner() {
+  return (
+    <div className="flex shrink-0 items-center justify-center gap-2 bg-accent/15 px-4 py-1.5 text-center text-xs text-ink">
+      <IconInfo className="h-3.5 w-3.5 shrink-0 text-accent" />
+      <span>
+        Public demo — this workspace resets periodically. Uploads, feeds, and AI
+        are disabled.
+      </span>
+    </div>
   );
 }
 

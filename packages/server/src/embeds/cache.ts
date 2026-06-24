@@ -1,4 +1,5 @@
 import { db } from "../db/index.js";
+import { demoEmbedBudget, isDemoMode } from "../demo/index.js";
 import { fetchOpenGraph, type OgResult } from "./opengraph.js";
 
 const OK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // refetch a successful preview weekly
@@ -15,6 +16,14 @@ export type CachedOg = { status: "ok"; result: OgResult } | { status: "error" };
 export async function getOpenGraph(url: string): Promise<CachedOg> {
   const cached = await readFresh(url);
   if (cached) return cached;
+
+  // Public-demo guard: cap real outbound fetches per window so a flood of unique
+  // URLs can't turn the shared sandbox into an open fetch proxy. Over budget we
+  // return an error *without* caching it, so the URL is retried once the window
+  // frees up (and existing preview cards are left untouched by the worker).
+  if (isDemoMode() && !demoEmbedBudget.tryConsume()) {
+    return { status: "error" };
+  }
 
   try {
     const result = await fetchOpenGraph(url);
