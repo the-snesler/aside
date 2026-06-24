@@ -8,6 +8,7 @@ import { startDemoReset } from "./demo/reset.js";
 import { seedDemo } from "./demo/seed.js";
 import { startEmbeds } from "./embeds/index.js";
 import { startFeedScheduler } from "./feeds/scheduler.js";
+import { startReminderWorker } from "./reminders/worker.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -21,6 +22,11 @@ startEmbeds();
 // (keeps channel descriptions current). No-op until enabled in settings; must
 // run after initDb so the seq counters are primed.
 startAmbientAi();
+
+// Send due reminders through Web Push. The worker is independent from sync
+// state: it records server-only delivery rows so notes do not get edited when a
+// notification is sent.
+startReminderWorker();
 
 const app = createApp();
 

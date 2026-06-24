@@ -9,6 +9,7 @@ export interface MessagesTable {
   channel_ids: string | null;
   text: string;
   created_at: number;
+  due_at: number | null;
   updated_at: number;
   /** server-owned replication cursor */
   seq: number;
@@ -246,6 +247,34 @@ export interface AiChannelStateTable {
   updated_at: number;
 }
 
+/** Server-only Web Push VAPID key material. Exactly one row is expected. */
+export interface WebPushConfigTable {
+  id: string;
+  public_key: string;
+  private_key: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/** Server-only browser push subscriptions, keyed by the push endpoint URL. */
+export interface PushSubscriptionsTable {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/** Server-only reminder delivery ledger, keyed by message id + dueAt. */
+export interface ReminderDeliveriesTable {
+  id: string;
+  message_id: string;
+  due_at: number;
+  delivered_at: number;
+  last_error: string | null;
+}
+
 /** Single-user password record. Exactly one row is expected, keyed by "owner". */
 export interface AuthOwnerTable {
   id: string;
@@ -280,6 +309,9 @@ export interface Database {
   ai_config: AiConfigTable;
   ai_message_state: AiMessageStateTable;
   ai_channel_state: AiChannelStateTable;
+  web_push_config: WebPushConfigTable;
+  push_subscriptions: PushSubscriptionsTable;
+  reminder_deliveries: ReminderDeliveriesTable;
   auth_owner: AuthOwnerTable;
   auth_sessions: AuthSessionsTable;
 }

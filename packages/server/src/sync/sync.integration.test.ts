@@ -28,6 +28,7 @@ function message(
     channelIds: ["general"],
     text: `note ${counter}`,
     createdAt: 1000,
+    dueAt: 0,
     updatedAt: 1000,
     _deleted: false,
     ...overrides,

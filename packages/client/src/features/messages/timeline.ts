@@ -1,7 +1,14 @@
 import type { MessageDoc } from "@aside/shared";
 import type { MangoQuerySelector, RxDocument } from "rxdb";
 import type { MessageCollection } from "../../db/database";
-import { ALL_ID, LINKS_ID, PHOTOS_ID, TODAY_ID, matchesView } from "../views";
+import {
+  ALL_ID,
+  LINKS_ID,
+  PHOTOS_ID,
+  REMINDERS_ID,
+  TODAY_ID,
+  matchesView,
+} from "../views";
 
 const PAGE_SIZE = 50;
 const SCAN_SIZE = 160;
@@ -16,11 +23,14 @@ export type TimelineRow =
   | { type: "day"; key: string; label: string }
   | { type: "message"; key: string; doc: RxDocument<MessageDoc> };
 
-export function rowsByDay(docs: RxDocument<MessageDoc>[]): TimelineRow[] {
+export function rowsByDay(
+  docs: RxDocument<MessageDoc>[],
+  view = ALL_ID,
+): TimelineRow[] {
   const rows: TimelineRow[] = [];
   let lastKey: string | null = null;
   for (const doc of docs) {
-    const date = new Date(doc.createdAt);
+    const date = new Date(rowTimestamp(doc, view));
     const key = date.toDateString();
     if (lastKey !== key) {
       rows.push({
@@ -41,6 +51,9 @@ export async function fetchPage(
   imageMessageIds: Set<string>,
   before: number | null,
 ): Promise<PageResult> {
+  if (view === REMINDERS_ID) {
+    return fetchUpcomingReminderPage(messages, before);
+  }
   if (view !== ALL_ID && view !== TODAY_ID) {
     return fetchFilteredPage(messages, view, imageMessageIds, before);
   }
@@ -50,6 +63,28 @@ export async function fetchPage(
     PAGE_SIZE,
   );
   return pageFromBatch(docs);
+}
+
+async function fetchUpcomingReminderPage(
+  messages: MessageCollection,
+  afterDueAt: number | null,
+): Promise<PageResult> {
+  const dueAt =
+    afterDueAt === null
+      ? { $gte: Date.now() }
+      : { $gt: afterDueAt, $gte: Date.now() };
+  const docs = await messages
+    .find({
+      selector: { dueAt },
+      sort: [{ dueAt: "asc" }],
+      limit: PAGE_SIZE,
+    })
+    .exec();
+  return {
+    docs,
+    nextCursor: newestDueAt(docs),
+    hasMore: docs.length === PAGE_SIZE,
+  };
 }
 
 async function fetchFilteredPage(
@@ -76,7 +111,7 @@ async function fetchFilteredPage(
   }
 
   return {
-    docs: sortAscending(matches).slice(-PAGE_SIZE),
+    docs: sortAscending(matches, view).slice(-PAGE_SIZE),
     nextCursor: cursor,
     hasMore,
   };
@@ -126,6 +161,9 @@ export function liveSelector(
     const { start, end } = todayRange();
     return { createdAt: { $gte: Math.max(start, after), $lt: end } };
   }
+  if (view === REMINDERS_ID) {
+    return { dueAt: { $gte: Date.now() } };
+  }
   if (view === ALL_ID || view === LINKS_ID || view === PHOTOS_ID) {
     return { createdAt: { $gte: after } };
   }
@@ -143,22 +181,35 @@ function pageFromBatch(docs: RxDocument<MessageDoc>[]): PageResult {
 export function mergeDocs(
   left: RxDocument<MessageDoc>[],
   right: RxDocument<MessageDoc>[],
+  view = ALL_ID,
 ): RxDocument<MessageDoc>[] {
   const byId = new Map<string, RxDocument<MessageDoc>>();
   for (const doc of left) byId.set(doc.id, doc);
   for (const doc of right) byId.set(doc.id, doc);
-  return sortAscending([...byId.values()]);
+  return sortAscending([...byId.values()], view);
 }
 
 function sortAscending(
   docs: RxDocument<MessageDoc>[],
+  view = ALL_ID,
 ): RxDocument<MessageDoc>[] {
-  return [...docs].sort((a, b) => a.createdAt - b.createdAt);
+  return [...docs].sort(
+    (a, b) => rowTimestamp(a, view) - rowTimestamp(b, view),
+  );
 }
 
 function oldestCreatedAt(docs: RxDocument<MessageDoc>[]): number | null {
   if (docs.length === 0) return null;
   return Math.min(...docs.map((doc) => doc.createdAt));
+}
+
+function newestDueAt(docs: RxDocument<MessageDoc>[]): number | null {
+  if (docs.length === 0) return null;
+  return Math.max(...docs.map((doc) => doc.dueAt ?? 0));
+}
+
+function rowTimestamp(doc: MessageDoc, view: string): number {
+  return view === REMINDERS_ID ? doc.dueAt : doc.createdAt;
 }
 
 function todayRange(): { start: number; end: number } {

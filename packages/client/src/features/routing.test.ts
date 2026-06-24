@@ -4,7 +4,9 @@ import {
   ALL_ID,
   LINKS_ID,
   PHOTOS_ID,
+  REMINDERS_ID,
   SETTINGS_ID,
+  TASKS_ID,
   TODAY_ID,
 } from "./views";
 
@@ -15,6 +17,8 @@ describe("viewToPath", () => {
 
   it("maps smart filters to reserved paths", () => {
     expect(viewToPath(TODAY_ID)).toBe("/today");
+    expect(viewToPath(TASKS_ID)).toBe("/tasks");
+    expect(viewToPath(REMINDERS_ID)).toBe("/reminders");
     expect(viewToPath(LINKS_ID)).toBe("/links");
     expect(viewToPath(PHOTOS_ID)).toBe("/photos");
     expect(viewToPath(SETTINGS_ID)).toBe("/settings");
@@ -34,6 +38,8 @@ describe("pathToView", () => {
 
   it("maps reserved paths back to smart filters", () => {
     expect(pathToView("/today")).toBe(TODAY_ID);
+    expect(pathToView("/tasks")).toBe(TASKS_ID);
+    expect(pathToView("/reminders")).toBe(REMINDERS_ID);
     expect(pathToView("/settings")).toBe(SETTINGS_ID);
   });
 
@@ -52,6 +58,8 @@ describe("round trip", () => {
     for (const view of [
       ALL_ID,
       TODAY_ID,
+      TASKS_ID,
+      REMINDERS_ID,
       LINKS_ID,
       PHOTOS_ID,
       SETTINGS_ID,

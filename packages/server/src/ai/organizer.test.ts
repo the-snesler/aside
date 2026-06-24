@@ -83,6 +83,7 @@ function seedMessage(over: Partial<Record<string, unknown>> = {}) {
     channelIds: ["general"],
     text: "thoughts on LLMs",
     createdAt: 1,
+    dueAt: 0,
     updatedAt: 5,
     _deleted: false,
     ...over,

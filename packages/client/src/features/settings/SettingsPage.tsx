@@ -33,6 +33,12 @@ import { AiSettings } from "../ai/AiSettings";
 import { FeedSettings } from "../feeds/FeedSettings";
 import { Segmented } from "./Segmented";
 import { ThemeStudio } from "./ThemeStudio";
+import {
+  currentPushEndpoint,
+  disablePushNotifications,
+  enablePushNotifications,
+  getNotificationStatus,
+} from "../notifications/api";
 import IconBell from "~icons/lucide/bell";
 import IconDatabase from "~icons/lucide/database";
 import IconFile from "~icons/lucide/file";
@@ -66,44 +72,44 @@ const sections: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
-  {
-    id: "ai",
-    title: "Ambient AI",
-    description:
-      "Background bots that auto-organize notes and describe channels.",
-    icon: <IconSparkles className="h-5 w-5" />,
-  },
-  {
-    id: "feeds",
-    title: "Feeds",
-    description: "Sources, schedules, sessions, and refresh status.",
-    icon: <IconRss className="h-5 w-5" />,
-  },
-  {
-    id: "appearance",
-    title: "Appearance",
-    description: "Theme, density, and display preferences.",
-    icon: <IconPalette className="h-5 w-5" />,
-  },
-  {
-    id: "storage",
-    title: "Storage",
-    description: "Local database, sync status, and attachment cache.",
-    icon: <IconDatabase className="h-5 w-5" />,
-  },
-  {
-    id: "notifications",
-    title: "Notifications",
-    description: "Device alerts and install-time permissions.",
-    icon: <IconBell className="h-5 w-5" />,
-  },
-  {
-    id: "security",
-    title: "Security",
-    description: "Password and session protection.",
-    icon: <IconLock className="h-5 w-5" />,
-  },
-];
+    {
+      id: "ai",
+      title: "Ambient AI",
+      description:
+        "Background bots that auto-organize notes and describe channels.",
+      icon: <IconSparkles className="h-5 w-5" />,
+    },
+    {
+      id: "feeds",
+      title: "Feeds",
+      description: "Sources, schedules, sessions, and refresh status.",
+      icon: <IconRss className="h-5 w-5" />,
+    },
+    {
+      id: "appearance",
+      title: "Appearance",
+      description: "Theme, density, and display preferences.",
+      icon: <IconPalette className="h-5 w-5" />,
+    },
+    {
+      id: "storage",
+      title: "Storage",
+      description: "Local database, sync status, and attachment cache.",
+      icon: <IconDatabase className="h-5 w-5" />,
+    },
+    {
+      id: "notifications",
+      title: "Notifications",
+      description: "Device alerts and install-time permissions.",
+      icon: <IconBell className="h-5 w-5" />,
+    },
+    {
+      id: "security",
+      title: "Security",
+      description: "Password and session protection.",
+      icon: <IconLock className="h-5 w-5" />,
+    },
+  ];
 
 export function SettingsPage({
   channels,
@@ -139,11 +145,10 @@ export function SettingsPage({
                 key={section.id}
                 type="button"
                 onClick={() => setActiveSection(section.id)}
-                className={`flex min-w-[180px] items-start gap-3 rounded-lg px-3 py-3 text-left transition md:min-w-0 ${
-                  section.id === activeSection
-                    ? "bg-active text-ink"
-                    : "text-muted hover:bg-hover hover:text-ink"
-                }`}
+                className={`flex min-w-[180px] items-start gap-3 rounded-lg px-3 py-3 text-left transition md:min-w-0 ${section.id === activeSection
+                  ? "bg-active text-ink"
+                  : "text-muted hover:bg-hover hover:text-ink"
+                  }`}
               >
                 <span className="mt-0.5 shrink-0 text-accent">
                   {section.icon}
@@ -237,11 +242,10 @@ function AppearanceSettings({ config }: { config: ConfigCollection }) {
               key={preset.id}
               type="button"
               onClick={() => void saveThemePalette(config, preset.palette)}
-              className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition hover:border-accent ${
-                activePreset?.id === preset.id
-                  ? "border-accent ring-1 ring-accent"
-                  : "border-divider"
-              }`}
+              className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition hover:border-accent ${activePreset?.id === preset.id
+                ? "border-accent ring-1 ring-accent"
+                : "border-divider"
+                }`}
             >
               <PresetSwatch palette={preset.palette} />
               <span className="text-xs font-medium text-ink">
@@ -639,9 +643,8 @@ function AttachmentTile({
   const isImage = att.mimeType.startsWith("image/");
   return (
     <div
-      className={`relative overflow-hidden rounded-lg border bg-rail ${
-        selected ? "border-accent ring-1 ring-accent" : "border-divider"
-      }`}
+      className={`relative overflow-hidden rounded-lg border bg-rail ${selected ? "border-accent ring-1 ring-accent" : "border-divider"
+        }`}
     >
       <label className="absolute left-2 top-2 z-10 flex cursor-pointer rounded bg-panel/80 p-0.5 shadow-sm">
         <input
@@ -708,10 +711,52 @@ function NotificationSettings() {
       ? "unsupported"
       : Notification.permission,
   );
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function requestPermission() {
-    if (typeof Notification === "undefined") return;
-    setPermission(await Notification.requestPermission());
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const endpoint = await currentPushEndpoint();
+        const status = await getNotificationStatus(endpoint);
+        if (!cancelled) setSubscribed(status.subscribed);
+      } catch {
+        if (!cancelled) setSubscribed(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function enable() {
+    setBusy(true);
+    setError(null);
+    try {
+      const status = await enablePushNotifications();
+      setPermission(Notification.permission);
+      setSubscribed(status.subscribed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not subscribe.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disable() {
+    setBusy(true);
+    setError(null);
+    try {
+      await disablePushNotifications();
+      setSubscribed(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not unsubscribe.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -723,16 +768,33 @@ function NotificationSettings() {
             Current permission:{" "}
             <span className="font-medium">{permission}</span>
           </p>
+          <p className="mt-1 text-sm text-muted">
+            Push subscription:{" "}
+            <span className="font-medium">
+              {subscribed ? "enabled" : "disabled"}
+            </span>
+          </p>
         </div>
-        <button
-          type="button"
-          disabled={permission !== "default"}
-          onClick={() => void requestPermission()}
-          className="rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
-          Request permission
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy || permission === "unsupported" || subscribed}
+            onClick={() => void enable()}
+            className="rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            Enable
+          </button>
+          <button
+            type="button"
+            disabled={busy || !subscribed}
+            onClick={() => void disable()}
+            className="rounded border border-divider bg-sidebar px-3 py-2 text-sm font-medium text-ink hover:bg-hover disabled:opacity-50"
+          >
+            Disable
+          </button>
+        </div>
       </div>
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
     </div>
   );
 }

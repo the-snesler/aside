@@ -7,6 +7,7 @@ const base: ReplicatedMessageDoc = {
   channelIds: ["general"],
   text: "hello",
   createdAt: 1,
+  dueAt: 0,
   updatedAt: 10,
   _deleted: false,
 };

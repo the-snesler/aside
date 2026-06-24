@@ -43,6 +43,7 @@ export function buildDemoSeed(now: number = Date.now()): DemoSeed {
       channelIds,
       text,
       createdAt: ts,
+      dueAt: 0,
       updatedAt: ts,
       _deleted: false,
     };

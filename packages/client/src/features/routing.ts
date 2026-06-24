@@ -3,7 +3,9 @@ import {
   ALL_ID,
   LINKS_ID,
   PHOTOS_ID,
+  REMINDERS_ID,
   SETTINGS_ID,
+  TASKS_ID,
   TODAY_ID,
 } from "./views";
 
@@ -17,6 +19,8 @@ import {
  */
 const RESERVED: ReadonlyArray<readonly [string, string]> = [
   [TODAY_ID, "today"],
+  [TASKS_ID, "tasks"],
+  [REMINDERS_ID, "reminders"],
   [LINKS_ID, "links"],
   [PHOTOS_ID, "photos"],
   [SETTINGS_ID, "settings"],

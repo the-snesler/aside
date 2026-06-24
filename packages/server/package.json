@@ -25,11 +25,13 @@
     "open-graph-scraper": "^6.11.0",
     "puppeteer": "^24.43.1",
     "sharp": "^0.34.5",
+    "web-push": "^3.6.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.20",
+    "@types/web-push": "^3.6.4",
     "tsup": "^8.5.1",
     "tsx": "^4.22.4",
     "typescript": "^5.9.3"

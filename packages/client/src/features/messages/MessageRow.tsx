@@ -17,6 +17,7 @@ import {
 } from "@floating-ui/react";
 import type { RxDocument } from "rxdb";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import IconBell from "~icons/lucide/bell";
 import IconCopy from "~icons/lucide/copy";
 import IconPin from "~icons/lucide/pin";
 import IconPinOff from "~icons/lucide/pin-off";
@@ -46,7 +47,7 @@ export function MessageRow({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
-  onSaveDate,
+  onSaveMetadata,
   onToggleTask,
   onCopy,
   onDelete,
@@ -69,7 +70,11 @@ export function MessageRow({
   onStartEdit: (doc: RxDocument<MessageDoc>) => void;
   onCancelEdit: () => void;
   onSaveEdit: (doc: RxDocument<MessageDoc>, raw: string) => Promise<void>;
-  onSaveDate: (doc: RxDocument<MessageDoc>, createdAt: number) => Promise<void>;
+  onSaveMetadata: (
+    doc: RxDocument<MessageDoc>,
+    createdAt: number,
+    dueAt: number | null,
+  ) => Promise<void>;
   onToggleTask: (
     doc: RxDocument<MessageDoc>,
     nextText: string,
@@ -91,6 +96,9 @@ export function MessageRow({
   const [dateEditorOpen, setDateEditorOpen] = useState(false);
   const [dateValue, setDateValue] = useState(() =>
     toDateTimeInputValue(doc.createdAt),
+  );
+  const [reminderValue, setReminderValue] = useState(() =>
+    doc.dueAt > 0 ? toDateTimeInputValue(doc.dueAt) : "",
   );
   const dateFloating = useFloating({
     open: dateEditorOpen,
@@ -195,13 +203,22 @@ export function MessageRow({
     onStartEdit(doc);
   }
 
-  async function saveDate() {
-    const next = new Date(dateValue).getTime();
-    if (!Number.isFinite(next) || next < 0 || next === doc.createdAt) {
+  async function saveMetadata() {
+    const nextCreatedAt = new Date(dateValue).getTime();
+    const nextDueAt = reminderValue ? new Date(reminderValue).getTime() : null;
+    const validCreatedAt = Number.isFinite(nextCreatedAt) && nextCreatedAt >= 0;
+    const validDueAt =
+      nextDueAt === null || (Number.isFinite(nextDueAt) && nextDueAt >= 0);
+    if (!validCreatedAt || !validDueAt) return;
+
+    const changedDate = nextCreatedAt !== doc.createdAt;
+    const currentDueAt = doc.dueAt > 0 ? doc.dueAt : null;
+    const changedReminder = currentDueAt !== nextDueAt;
+    if (!changedDate && !changedReminder) {
       setDateEditorOpen(false);
       return;
     }
-    await onSaveDate(doc, next);
+    await onSaveMetadata(doc, nextCreatedAt, nextDueAt);
     setDateEditorOpen(false);
   }
 
@@ -230,8 +247,9 @@ export function MessageRow({
         // Suppress the OS long-press/right-click menu so ours shows instead.
         if (isTouch) e.preventDefault();
       }}
-      className={`group w-full relative flex gap-3 rounded-xl px-2 py-(--msg-pad-y) transition-all hover:bg-hover md:px-3 ${highlighted ? "bg-active ring-2 ring-accent/60" : ""
-        }`}
+      className={`group w-full relative flex gap-3 rounded-xl px-2 py-(--msg-pad-y) transition-all hover:bg-hover md:px-3 ${
+        highlighted ? "bg-active ring-2 ring-accent/60" : ""
+      }`}
     >
       <span className="relative w-14 shrink-0 pt-0.5 text-right text-[0.65rem] tabular-nums text-muted">
         <button
@@ -240,6 +258,9 @@ export function MessageRow({
           {...getDateReferenceProps({
             onClick: () => {
               setDateValue(toDateTimeInputValue(doc.createdAt));
+              setReminderValue(
+                doc.dueAt > 0 ? toDateTimeInputValue(doc.dueAt) : "",
+              );
               setDateEditorOpen((open) => !open);
             },
           })}
@@ -248,6 +269,14 @@ export function MessageRow({
         >
           {formatTime(doc.createdAt)}
         </button>
+        {doc.dueAt > 0 && (
+          <IconBell
+            className="ml-1 inline h-3 w-3 align-[-1px] text-accent"
+            aria-label="Reminder set"
+          >
+            <title>{`Reminder ${new Date(doc.dueAt).toLocaleString()}`}</title>
+          </IconBell>
+        )}
         {dateEditorOpen && (
           <FloatingPortal>
             <form
@@ -256,11 +285,11 @@ export function MessageRow({
               {...getDateFloatingProps({
                 onSubmit: (e) => {
                   e.preventDefault();
-                  void saveDate();
+                  void saveMetadata();
                 },
               })}
               data-no-row-edit
-              className="z-30 w-64 rounded-xl bg-panel p-3 text-left text-sm shadow-xl ring-1 ring-divider"
+              className="z-30 w-72 rounded-xl bg-panel p-3 text-left text-sm shadow-xl ring-1 ring-divider"
             >
               <label className="block text-xs font-medium uppercase tracking-wide text-muted">
                 Date
@@ -272,7 +301,26 @@ export function MessageRow({
                 onChange={(e) => setDateValue(e.target.value)}
                 className="mt-1 w-full rounded-lg bg-chat px-2 py-1.5 text-ink outline-none ring-1 ring-divider focus:ring-accent"
               />
+              <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-muted">
+                Reminder
+              </label>
+              <input
+                type="datetime-local"
+                min="1970-01-01T00:00"
+                value={reminderValue}
+                onChange={(e) => setReminderValue(e.target.value)}
+                className="mt-1 w-full rounded-lg bg-chat px-2 py-1.5 text-ink outline-none ring-1 ring-divider focus:ring-accent"
+              />
               <div className="mt-3 flex justify-end gap-2">
+                {doc.dueAt > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setReminderValue("")}
+                    className="mr-auto rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-hover hover:text-danger"
+                  >
+                    Remove
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setDateEditorOpen(false)}
@@ -354,8 +402,9 @@ export function MessageRow({
       </div>
       {!isEditing && (
         <span
-          className={`absolute right-2 top-0 -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider ${channelPickerOpen ? "flex" : "hidden group-hover:flex"
-            }`}
+          className={`absolute right-2 top-0 -translate-y-1/2 items-center gap-0.5 rounded-lg bg-panel px-1 py-0.5 shadow-md ring-1 ring-divider ${
+            channelPickerOpen ? "flex" : "hidden group-hover:flex"
+          }`}
         >
           <button
             type="button"
@@ -413,8 +462,9 @@ export function MessageRow({
               return (
                 <label
                   key={channel.id}
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${disabled ? "text-muted" : "text-ink hover:bg-hover"
-                    }`}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${
+                    disabled ? "text-muted" : "text-ink hover:bg-hover"
+                  }`}
                 >
                   <input
                     type="checkbox"

@@ -14,6 +14,7 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .addColumn("channel_ids", "text")
     .addColumn("text", "text", (c) => c.notNull())
     .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("due_at", "integer")
     .addColumn("updated_at", "integer", (c) => c.notNull())
     .addColumn("seq", "integer", (c) => c.notNull().defaultTo(0))
     .addColumn("deleted", "integer", (c) => c.notNull().defaultTo(0))
@@ -21,6 +22,7 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
 
   await ensureSeqColumn(db);
   await ensureMessageChannelIdsColumn(db);
+  await ensureMessageDueAtColumn(db);
   await backfillSeq(db);
 
   // Pull orders by seq; this index keeps that scan cheap.
@@ -291,6 +293,37 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .on("auth_sessions")
     .column("token_hash")
     .execute();
+
+  await db.schema
+    .createTable("web_push_config")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("public_key", "text", (c) => c.notNull())
+    .addColumn("private_key", "text", (c) => c.notNull())
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("push_subscriptions")
+    .ifNotExists()
+    .addColumn("endpoint", "text", (c) => c.primaryKey())
+    .addColumn("p256dh", "text", (c) => c.notNull())
+    .addColumn("auth", "text", (c) => c.notNull())
+    .addColumn("user_agent", "text")
+    .addColumn("created_at", "integer", (c) => c.notNull())
+    .addColumn("updated_at", "integer", (c) => c.notNull())
+    .execute();
+
+  await db.schema
+    .createTable("reminder_deliveries")
+    .ifNotExists()
+    .addColumn("id", "text", (c) => c.primaryKey())
+    .addColumn("message_id", "text", (c) => c.notNull())
+    .addColumn("due_at", "integer", (c) => c.notNull())
+    .addColumn("delivered_at", "integer", (c) => c.notNull())
+    .addColumn("last_error", "text")
+    .execute();
 }
 
 async function ensureSeqColumn(db: Kysely<Database>): Promise<void> {
@@ -377,6 +410,19 @@ async function ensureMessageChannelIdsColumn(
       .updateTable("messages")
       .set({ channel_ids: JSON.stringify([row.channel_id]) })
       .where("id", "=", row.id)
+      .execute();
+  }
+}
+
+async function ensureMessageDueAtColumn(db: Kysely<Database>): Promise<void> {
+  const tables = await db.introspection.getTables();
+  const messages = tables.find((table) => table.name === "messages");
+  const hasDueAt = messages?.columns.some((column) => column.name === "due_at");
+
+  if (!hasDueAt) {
+    await db.schema
+      .alterTable("messages")
+      .addColumn("due_at", "integer")
       .execute();
   }
 }

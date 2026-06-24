@@ -42,6 +42,7 @@ export const messagesSync: SyncCollection<ReplicatedMessageDoc> = {
           channel_ids: row.channel_ids,
           text: row.text,
           created_at: row.created_at,
+          due_at: row.due_at,
           updated_at: row.updated_at,
           seq: row.seq,
           deleted: row.deleted,

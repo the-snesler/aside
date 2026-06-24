@@ -1,5 +1,6 @@
 import {
   DEFAULT_CHANNEL_ID,
+  parseReminder,
   type AttachmentDoc,
   type ChannelDoc,
   type EmbedDoc,
@@ -32,7 +33,14 @@ import {
   messageChannelIds,
   removeMessageChannel,
 } from "../channels/membership";
-import { isSmartView, matchesView, PHOTOS_ID, type NoteCounts } from "../views";
+import {
+  isSmartView,
+  matchesView,
+  PHOTOS_ID,
+  REMINDERS_ID,
+  TASKS_ID,
+  type NoteCounts,
+} from "../views";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
 import { MessageActionSheet } from "./MessageActionSheet";
 import { MessageComposer } from "./MessageComposer";
@@ -240,9 +248,10 @@ export function MessageList({
       // rows kept their absolute index, so it holds the scroll position.
       const prev = docsRef.current;
       const prepended =
-        rowsByDay(mergeDocs(page.docs, prev)).length - rowsByDay(prev).length;
+        rowsByDay(mergeDocs(page.docs, prev, view), view).length -
+        rowsByDay(prev, view).length;
       if (prepended > 0) setFirstItemIndex((index) => index - prepended);
-      setDocs((current) => mergeDocs(page.docs, current));
+      setDocs((current) => mergeDocs(page.docs, current, view));
     } finally {
       loadingOlderRef.current = false;
       setLoadingOlder(false);
@@ -261,12 +270,22 @@ export function MessageList({
           matchesView(view, doc, photoFilterIds),
         );
         if (next.length === 0) return;
-        setDocs((prev) => mergeDocs(prev, next));
+        setDocs((prev) => mergeDocs(prev, next, view));
       });
     return () => sub.unsubscribe();
   }, [photoFilterIds, liveAfter, messages, view]);
 
-  const rows = useMemo(() => rowsByDay(docs), [docs]);
+  useEffect(() => {
+    if (view !== REMINDERS_ID) return;
+    const clock = window.setInterval(() => {
+      setDocs((prev) =>
+        prev.filter((doc) => matchesView(view, doc, photoFilterIds)),
+      );
+    }, 60_000);
+    return () => window.clearInterval(clock);
+  }, [photoFilterIds, view]);
+
+  const rows = useMemo(() => rowsByDay(docs, view), [docs, view]);
 
   // Drain a one-shot scroll request once its row is present. `rows` is a
   // dependency so a target set before the row exists (e.g. a freshly sent note
@@ -318,6 +337,29 @@ export function MessageList({
   );
   const composerInitialValue =
     currentChannel && channelType(currentChannel) === "todo" ? "- [ ] " : "";
+  const emptyState = useMemo(() => {
+    if (view === TASKS_ID) {
+      return {
+        title: "No open tasks.",
+        hint: "Create one with an unchecked Markdown checkbox, like so: - [ ] Follow up",
+      };
+    }
+    if (view === REMINDERS_ID) {
+      return {
+        title: "No upcoming reminders.",
+        hint: "Type a date in a note, or use the time menu on any note to add one.",
+      };
+    }
+    if (currentChannel && channelType(currentChannel) === "todo") {
+      return {
+        title: "No tasks in this channel yet.",
+        hint: "Start with the prefilled checkbox and write the next thing to do.",
+      };
+    }
+    return {
+      title: smartView ? "No notes here yet." : "No notes in this channel yet.",
+    };
+  }, [currentChannel, smartView, view]);
 
   useEffect(() => {
     if (currentPinnedMessageIds.length === 0) {
@@ -441,6 +483,7 @@ export function MessageList({
     if (!body && ready.length === 0) return;
 
     const now = Date.now();
+    const reminder = parseReminder(body, new Date(now));
     // Generate the message id up front so the attachment rows can link to it.
     const messageId = crypto.randomUUID();
     const inserted = await messages.insert({
@@ -448,6 +491,7 @@ export function MessageList({
       channelIds: [targetChannelId],
       text: body,
       createdAt: now,
+      dueAt: reminder?.dueAt ?? 0,
       updatedAt: now,
     });
     for (const item of ready) {
@@ -464,7 +508,7 @@ export function MessageList({
     }
     clearPending();
     if (matchesView(view, inserted, photoFilterIds)) {
-      setDocs((prev) => mergeDocs(prev, [inserted]));
+      setDocs((prev) => mergeDocs(prev, [inserted], view));
       setScrollTarget({ id: inserted.id, align: "end", highlight: false });
     }
     // Remount the composer to clear it and put the caret back.
@@ -485,9 +529,10 @@ export function MessageList({
       setDocs((prev) => {
         return matchesView(view, updated, photoFilterIds)
           ? mergeDocs(
-              prev.filter((item) => item.id !== updated.id),
-              [updated],
-            )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+            view,
+          )
           : prev.filter((item) => item.id !== updated.id);
       });
       return;
@@ -527,32 +572,47 @@ export function MessageList({
       cancelEdit();
       return;
     }
-    const updated = await doc.incrementalPatch({
-      text: trimmed,
-      updatedAt: Date.now(),
+    const now = Date.now();
+    const reminder = parseReminder(trimmed, new Date(now));
+    const updated = await doc.incrementalModify((data) => {
+      const next: MessageDoc = {
+        ...data,
+        text: trimmed,
+        updatedAt: now,
+      };
+      if (reminder) next.dueAt = reminder.dueAt;
+      else next.dueAt = 0;
+      return next;
     });
     setDocs((prev) => {
       return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+          view,
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
   }
 
-  async function saveDate(doc: RxDocument<MessageDoc>, createdAt: number) {
-    const updated = await doc.incrementalPatch({
-      createdAt,
-      updatedAt: Date.now(),
+  async function saveMetadata(
+    doc: RxDocument<MessageDoc>,
+    createdAt: number,
+    dueAt: number | null,
+  ) {
+    const updated = await doc.incrementalModify((data) => {
+      const next: MessageDoc = { ...data, createdAt, updatedAt: Date.now() };
+      next.dueAt = dueAt ?? 0;
+      return next;
     });
     setDocs((prev) => {
       return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+          view,
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -568,9 +628,10 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+          view,
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -594,9 +655,10 @@ export function MessageList({
     setDocs((prev) => {
       return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+          prev.filter((item) => item.id !== updated.id),
+          [updated],
+          view,
+        )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -616,7 +678,7 @@ export function MessageList({
   function selectPinnedMessage(message: RxDocument<MessageDoc>) {
     setDocs((prev) => {
       if (prev.some((doc) => doc.id === message.id)) return prev;
-      return mergeDocs(prev, [message]);
+      return mergeDocs(prev, [message], view);
     });
     setScrollTarget({ id: message.id, align: "center", highlight: true });
   }
@@ -651,6 +713,7 @@ export function MessageList({
               hasMore,
               hasRows: rows.length > 0,
               smartView,
+              emptyState,
             }}
             firstItemIndex={firstItemIndex}
             initialTopMostItemIndex={Math.max(0, rows.length - 1)}
@@ -683,7 +746,7 @@ export function MessageList({
                   onStartEdit={startEdit}
                   onCancelEdit={cancelEdit}
                   onSaveEdit={saveEdit}
-                  onSaveDate={saveDate}
+                  onSaveMetadata={saveMetadata}
                   onToggleTask={toggleTask}
                   onCopy={copyMessage}
                   onDelete={deleteMessage}
@@ -724,16 +787,16 @@ export function MessageList({
               actions={[
                 ...(currentChannel
                   ? [
-                      {
-                        label: currentPinnedSet.has(target.id)
-                          ? "Unpin"
-                          : "Pin",
-                        Icon: currentPinnedSet.has(target.id)
-                          ? IconPinOff
-                          : IconPin,
-                        onSelect: () => void togglePin(target),
-                      },
-                    ]
+                    {
+                      label: currentPinnedSet.has(target.id)
+                        ? "Unpin"
+                        : "Pin",
+                      Icon: currentPinnedSet.has(target.id)
+                        ? IconPinOff
+                        : IconPin,
+                      onSelect: () => void togglePin(target),
+                    },
+                  ]
                   : []),
                 {
                   label: "Edit channels",

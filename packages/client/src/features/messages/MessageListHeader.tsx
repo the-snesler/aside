@@ -17,14 +17,18 @@ import IconImage from "~icons/lucide/image";
 import IconLink from "~icons/lucide/link";
 import IconList from "~icons/lucide/list";
 import IconMenu from "~icons/lucide/menu";
+import IconBell from "~icons/lucide/bell";
 import IconPin from "~icons/lucide/pin";
 import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
+import IconSquareCheck from "~icons/lucide/square-check";
 import IconSparkles from "~icons/lucide/sparkles";
 import {
   ALL_ID,
   LINKS_ID,
   PHOTOS_ID,
+  REMINDERS_ID,
+  TASKS_ID,
   TODAY_ID,
   type NoteCounts,
 } from "../views";
@@ -224,6 +228,10 @@ export function headerMeta(
       return { label: "All Notes", Icon: IconList, count: counts.all };
     case TODAY_ID:
       return { label: "Today", Icon: IconSparkles, count: counts.today };
+    case TASKS_ID:
+      return { label: "Tasks", Icon: IconSquareCheck, count: counts.tasks };
+    case REMINDERS_ID:
+      return { label: "Reminders", Icon: IconBell, count: counts.reminders };
     case LINKS_ID:
       return { label: "Links", Icon: IconLink, count: counts.links };
     case PHOTOS_ID:

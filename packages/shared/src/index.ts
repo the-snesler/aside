@@ -39,3 +39,4 @@ export {
   attachmentDocSchema,
   configDocSchema,
 } from "./validation.js";
+export { parseReminder, type ParsedReminder } from "./reminders.js";

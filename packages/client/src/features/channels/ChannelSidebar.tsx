@@ -5,15 +5,19 @@ import IconImage from "~icons/lucide/image";
 import IconLink from "~icons/lucide/link";
 import IconList from "~icons/lucide/list";
 import IconLogOut from "~icons/lucide/log-out";
+import IconSquareCheck from "~icons/lucide/square-check";
 import IconPlus from "~icons/lucide/plus";
 import IconSearch from "~icons/lucide/search";
 import IconSettings from "~icons/lucide/settings";
 import IconSparkles from "~icons/lucide/sparkles";
+import IconBell from "~icons/lucide/bell";
 import type { ChannelCollection } from "../../db/database";
 import {
   ALL_ID,
   LINKS_ID,
   PHOTOS_ID,
+  REMINDERS_ID,
+  TASKS_ID,
   TODAY_ID,
   type NoteCounts,
 } from "../views";
@@ -106,6 +110,18 @@ export function ChannelSidebar({
   const smartNav = [
     { id: ALL_ID, label: "All Notes", Icon: IconList, count: counts.all },
     { id: TODAY_ID, label: "Today", Icon: IconSparkles, count: counts.today },
+    {
+      id: TASKS_ID,
+      label: "Tasks",
+      Icon: IconSquareCheck,
+      count: counts.tasks,
+    },
+    {
+      id: REMINDERS_ID,
+      label: "Reminders",
+      Icon: IconBell,
+      count: counts.reminders,
+    },
     { id: LINKS_ID, label: "Links", Icon: IconLink, count: counts.links },
     { id: PHOTOS_ID, label: "Photos", Icon: IconImage, count: counts.photos },
   ];

@@ -15,9 +15,18 @@ export const ALL_ID = HOME_ID;
 export const TODAY_ID = "__today__";
 export const LINKS_ID = "__links__";
 export const PHOTOS_ID = "__photos__";
+export const TASKS_ID = "__tasks__";
+export const REMINDERS_ID = "__reminders__";
 export const SETTINGS_ID = "__settings__";
 
-const SMART_VIEW_IDS = new Set<string>([ALL_ID, TODAY_ID, LINKS_ID, PHOTOS_ID]);
+const SMART_VIEW_IDS = new Set<string>([
+  ALL_ID,
+  TODAY_ID,
+  LINKS_ID,
+  PHOTOS_ID,
+  TASKS_ID,
+  REMINDERS_ID,
+]);
 
 /** True if `view` is a smart filter rather than a channel id. */
 export function isSmartView(view: string): boolean {
@@ -44,6 +53,22 @@ export function hasLink(text: string): boolean {
   return URL_RE.test(text);
 }
 
+// GFM unchecked task markers, including the common `- [ ]` and `1. [ ]` forms.
+const OPEN_TASK_RE = /(^|\n)\s*(?:[-*+]|\d+[.)])\s+\[ \]/;
+
+/** Whether a note has at least one unchecked Markdown task checkbox. */
+export function hasOpenTask(text: string): boolean {
+  return OPEN_TASK_RE.test(text);
+}
+
+/** Whether a note has a reminder due now or in the future. */
+export function hasUpcomingReminder(
+  doc: MessageDoc,
+  now = Date.now(),
+): boolean {
+  return doc.dueAt > 0 && doc.dueAt >= now;
+}
+
 /**
  * Whether a note belongs in the given view. `imageMessageIds` is the set of
  * message ids that have at least one image attachment (the Photos filter).
@@ -52,6 +77,7 @@ export function matchesView(
   view: string,
   doc: MessageDoc,
   imageMessageIds: Set<string>,
+  now = Date.now(),
 ): boolean {
   switch (view) {
     case ALL_ID:
@@ -62,6 +88,10 @@ export function matchesView(
       return hasLink(doc.text);
     case PHOTOS_ID:
       return imageMessageIds.has(doc.id);
+    case TASKS_ID:
+      return hasOpenTask(doc.text);
+    case REMINDERS_ID:
+      return hasUpcomingReminder(doc, now);
     default:
       return messageHasChannel(doc, view);
   }
@@ -72,6 +102,8 @@ export interface NoteCounts {
   today: number;
   links: number;
   photos: number;
+  tasks: number;
+  reminders: number;
   /** channelId → note count */
   byChannel: Map<string, number>;
 }
@@ -81,6 +113,8 @@ const EMPTY_COUNTS: NoteCounts = {
   today: 0,
   links: 0,
   photos: 0,
+  tasks: 0,
+  reminders: 0,
   byChannel: new Map(),
 };
 
@@ -113,10 +147,12 @@ export function useNoteCounts(
       );
       recompute();
     });
+    const clock = window.setInterval(recompute, 60_000);
 
     return () => {
       msgSub.unsubscribe();
       attSub.unsubscribe();
+      window.clearInterval(clock);
     };
   }, [messages, attachments]);
 
@@ -131,13 +167,26 @@ export function computeCounts(
   let today = 0;
   let links = 0;
   let photos = 0;
+  let tasks = 0;
+  let reminders = 0;
+  const now = Date.now();
   for (const m of msgs) {
     if (isToday(m.createdAt)) today += 1;
     if (hasLink(m.text)) links += 1;
     if (imageMessageIds.has(m.id)) photos += 1;
+    if (hasOpenTask(m.text)) tasks += 1;
+    if (hasUpcomingReminder(m, now)) reminders += 1;
     for (const channelId of messageChannelIds(m)) {
       byChannel.set(channelId, (byChannel.get(channelId) ?? 0) + 1);
     }
   }
-  return { all: msgs.length, today, links, photos, byChannel };
+  return {
+    all: msgs.length,
+    today,
+    links,
+    photos,
+    tasks,
+    reminders,
+    byChannel,
+  };
 }

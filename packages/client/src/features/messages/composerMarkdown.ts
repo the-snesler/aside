@@ -20,6 +20,7 @@ export type FormattedText = {
   list?: boolean;
   punctuation?: boolean;
   mention?: boolean;
+  reminder?: boolean;
 };
 
 /** An atomic `#channel` chip: an inline void node carrying just the bare name. */
@@ -116,5 +117,8 @@ export function continueList(line: string): ListContinuation {
     nextMarker = `${parseInt(marker, 10) + 1}.`;
   }
   const nextCheckbox = checkbox ? "[ ] " : "";
-  return { kind: "continue", prefix: `${indent}${nextMarker}${gap}${nextCheckbox}` };
+  return {
+    kind: "continue",
+    prefix: `${indent}${nextMarker}${gap}${nextCheckbox}`,
+  };
 }

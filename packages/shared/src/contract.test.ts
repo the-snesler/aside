@@ -26,6 +26,7 @@ const sample: ReplicatedMessageDoc = {
   channelIds: ["general"],
   text: "hello",
   createdAt: 1,
+  dueAt: 10,
   updatedAt: 2,
   _deleted: false,
 };
@@ -52,7 +53,7 @@ describe("message contract", () => {
   });
 
   it("migrates old single-channel messages", () => {
-    expect(messageSchema.version).toBe(3);
+    expect(messageSchema.version).toBe(5);
     expect(messageMigrationStrategies[1](sample)).toBe(sample);
     expect(messageMigrationStrategies[2](sample)).toBe(sample);
     expect(
@@ -68,6 +69,23 @@ describe("message contract", () => {
       channelIds: ["links"],
       text: "hello",
       createdAt: 1,
+      updatedAt: 2,
+    });
+    expect(messageMigrationStrategies[4](sample)).toBe(sample);
+    expect(
+      messageMigrationStrategies[5]({
+        id: "message-3",
+        channelIds: ["general"],
+        text: "hello",
+        createdAt: 1,
+        updatedAt: 2,
+      }),
+    ).toEqual({
+      id: "message-3",
+      channelIds: ["general"],
+      text: "hello",
+      createdAt: 1,
+      dueAt: 0,
       updatedAt: 2,
     });
   });

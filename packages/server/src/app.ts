@@ -39,6 +39,12 @@ import {
 import { saveFeedCookies } from "./feeds/cookies.js";
 import { listSourceTypes } from "./feeds/registry.js";
 import { rescheduleFeed, runFeedNow, stopFeed } from "./feeds/scheduler.js";
+import {
+  deleteSubscription,
+  getNotificationStatus,
+  pushSubscriptionSchema,
+  saveSubscription,
+} from "./notifications/push.js";
 import { attachmentsSync } from "./sync/attachments.js";
 import { channelsSync } from "./sync/channels.js";
 import type { ReplicatedDoc, SyncCollection } from "./sync/collection.js";
@@ -88,6 +94,7 @@ export function createApp(): Hono {
   registerStorageRoutes(app);
   registerFeedRoutes(app);
   registerAiRoutes(app);
+  registerNotificationRoutes(app);
 
   // In prod the single container serves the built client from STATIC_DIR, with
   // an SPA fallback to index.html for any non-API, non-file route.
@@ -97,6 +104,25 @@ export function createApp(): Hono {
   }
 
   return app;
+}
+
+function registerNotificationRoutes(app: Hono): void {
+  app.get("/api/notifications/status", async (c) => {
+    const endpoint = c.req.query("endpoint");
+    return c.json(await getNotificationStatus(endpoint));
+  });
+
+  app.post("/api/notifications/subscribe", async (c) => {
+    const body = pushSubscriptionSchema.parse(await c.req.json());
+    await saveSubscription(body, c.req.header("user-agent") ?? null);
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/notifications/unsubscribe", async (c) => {
+    const body = await c.req.json<{ endpoint?: string }>();
+    if (body.endpoint) await deleteSubscription(body.endpoint);
+    return c.json({ ok: true });
+  });
 }
 
 /**

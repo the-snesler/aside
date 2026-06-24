@@ -16,6 +16,8 @@ export interface MessageDoc {
   text: string;
   /** ms epoch */
   createdAt: number;
+  /** ms epoch reminder time; 0 means the note has no reminder */
+  dueAt: number;
   /** ms epoch — last-write-time; used by conflict resolution and UI sorting */
   updatedAt: number;
 }

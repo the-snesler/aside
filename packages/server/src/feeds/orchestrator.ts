@@ -96,6 +96,7 @@ function itemToMessage(
     channelIds: [feed.channelId],
     text: item.text,
     createdAt: item.createdAt,
+    dueAt: 0,
     updatedAt: Date.now(),
     _deleted: false,
   };

@@ -1,3 +1,4 @@
+import { parseReminder } from "@aside/shared";
 import Prism from "prismjs";
 import "prismjs/components/prism-markdown";
 import {
@@ -142,6 +143,14 @@ function Leaf({ attributes, children, leaf }: RenderLeafProps) {
   if (leaf.blockquote) classes.push("text-muted", "italic");
   if (leaf.list) classes.push("text-muted");
   if (leaf.mention) classes.push("composer-md-mention");
+  if (leaf.reminder)
+    classes.push(
+      "rounded",
+      "bg-accent/15",
+      "text-accent",
+      "ring-1",
+      "ring-accent/20",
+    );
   if (leaf.punctuation) classes.push("text-muted");
   return (
     <span {...attributes} className={classes.join(" ")}>
@@ -244,6 +253,14 @@ export const MarkdownEditor = forwardRef<
       if (!Text.isText(node)) return ranges;
       const tokens = Prism.tokenize(node.text, grammar);
       collectRanges(tokens, path, 0, ranges);
+      const reminder = parseReminder(node.text);
+      if (reminder) {
+        ranges.push({
+          reminder: true,
+          anchor: { path, offset: reminder.index },
+          focus: { path, offset: reminder.end },
+        } as unknown as Range);
+      }
       return ranges;
     },
     [grammar],

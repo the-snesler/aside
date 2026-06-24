@@ -7,6 +7,10 @@ export interface ListContext {
   hasMore: boolean;
   hasRows: boolean;
   smartView: boolean;
+  emptyState: {
+    title: string;
+    hint?: string;
+  };
 }
 
 /** Top-of-list status: the older-page spinner, then the start-of-history mark. */
@@ -33,12 +37,19 @@ function ListFooter() {
 }
 
 function ListEmpty({ context }: { context?: ListContext }) {
+  const emptyState = context?.emptyState ?? {
+    title: context?.smartView
+      ? "No notes here yet."
+      : "No notes in this channel yet.",
+  };
+
   return (
-    <p className="px-2 py-8 text-center text-sm text-muted">
-      {context?.smartView
-        ? "No notes here yet."
-        : "No notes in this channel yet."}
-    </p>
+    <div className="mx-auto flex max-w-sm flex-col items-center px-6 py-10 text-center">
+      <p className="text-sm font-medium text-ink/80">{emptyState.title}</p>
+      {emptyState.hint && (
+        <p className="mt-2 text-sm leading-6 text-muted">{emptyState.hint}</p>
+      )}
+    </div>
   );
 }
 

@@ -9,6 +9,7 @@ function message(overrides: Partial<MessageDoc>): MessageDoc {
     channelIds: ["links"],
     text: "hello",
     createdAt: 1,
+    dueAt: 0,
     updatedAt: 10,
     ...overrides,
   };

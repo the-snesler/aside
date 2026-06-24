@@ -54,6 +54,7 @@ describe("demo mode", () => {
       channelIds: ["general"],
       text: "a visitor note",
       createdAt: now,
+      dueAt: 0,
       updatedAt: now,
       _deleted: false,
     };

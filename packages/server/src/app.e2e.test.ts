@@ -35,6 +35,7 @@ function message(): ReplicatedMessageDoc {
     channelIds: ["general"],
     text: "hello over http",
     createdAt: 1000,
+    dueAt: 2000,
     updatedAt: 1000,
     _deleted: false,
   };

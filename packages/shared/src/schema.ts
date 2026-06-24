@@ -14,7 +14,7 @@ import type {
  */
 export const messageSchema: RxJsonSchema<MessageDoc> = {
   title: "message schema",
-  version: 3,
+  version: 5,
   primaryKey: "id",
   type: "object",
   properties: {
@@ -32,22 +32,40 @@ export const messageSchema: RxJsonSchema<MessageDoc> = {
       maximum: 9007199254740991,
       multipleOf: 1,
     },
+    dueAt: {
+      type: "number",
+      minimum: 0,
+      maximum: 9007199254740991,
+      multipleOf: 1,
+    },
     updatedAt: { type: "number" },
   },
-  required: ["id", "channelIds", "text", "createdAt", "updatedAt"],
-  indexes: ["createdAt"],
+  required: ["id", "channelIds", "text", "createdAt", "dueAt", "updatedAt"],
+  indexes: ["createdAt", "dueAt"],
 } as const;
 
-type LegacyMessageDoc = Omit<MessageDoc, "channelIds"> & { channelId?: string };
+type OptionalReminderMessageDoc = Omit<MessageDoc, "dueAt"> & {
+  dueAt?: number;
+};
+type LegacyMessageDoc = Omit<OptionalReminderMessageDoc, "channelIds"> & {
+  channelId?: string;
+};
 
 export const messageMigrationStrategies = {
-  1: (doc: MessageDoc) => doc,
-  2: (doc: MessageDoc) => doc,
-  3: (doc: LegacyMessageDoc): MessageDoc => {
+  1: (doc: OptionalReminderMessageDoc) => doc,
+  2: (doc: OptionalReminderMessageDoc) => doc,
+  3: (doc: LegacyMessageDoc): OptionalReminderMessageDoc => {
     const channelId = doc.channelId || "general";
     const { channelId: _channelId, ...rest } = doc;
     return { ...rest, channelIds: [channelId] };
   },
+  // v4 adds optional dueAt; old notes simply omit it.
+  4: (doc: OptionalReminderMessageDoc) => doc,
+  // v5 makes dueAt required and indexed; 0 means "no reminder".
+  5: (doc: OptionalReminderMessageDoc): MessageDoc => ({
+    ...doc,
+    dueAt: doc.dueAt ?? 0,
+  }),
 };
 
 /**

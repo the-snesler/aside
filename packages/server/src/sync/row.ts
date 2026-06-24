@@ -20,6 +20,7 @@ export function rowToDoc(row: MessagesTable): ReplicatedMessageDoc {
     channelIds: parseChannelIds(row.channel_ids, row.channel_id),
     text: row.text,
     createdAt: row.created_at,
+    dueAt: row.due_at ?? 0,
     updatedAt: row.updated_at,
     _deleted: row.deleted === 1,
   };
@@ -37,6 +38,7 @@ export function docToRow(
     channel_ids: JSON.stringify(channelIds),
     text: doc.text,
     created_at: doc.createdAt,
+    due_at: doc.dueAt,
     updated_at: doc.updatedAt,
     seq,
     deleted: doc._deleted ? 1 : 0,

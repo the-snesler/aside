@@ -20,6 +20,7 @@ export const messageDocSchema: z.ZodType<ReplicatedMessageDoc> = z.object({
   // stops a writable public demo (or a buggy client) from bloating the DB.
   text: z.string().max(100_000),
   createdAt: z.number(),
+  dueAt: z.number(),
   updatedAt: z.number(),
   _deleted: z.boolean(),
 });
