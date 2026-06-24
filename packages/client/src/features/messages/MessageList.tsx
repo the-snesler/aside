@@ -32,7 +32,7 @@ import {
   messageChannelIds,
   removeMessageChannel,
 } from "../channels/membership";
-import { isSmartView, matchesView, type NoteCounts } from "../views";
+import { isSmartView, matchesView, PHOTOS_ID, type NoteCounts } from "../views";
 import type { MarkdownEditorHandle } from "./MarkdownEditor";
 import { MessageActionSheet } from "./MessageActionSheet";
 import { MessageComposer } from "./MessageComposer";
@@ -65,6 +65,18 @@ interface Props {
 // decrement it by the number of rows added to the front, which keeps the
 // viewport pinned to the same note as older history loads in (no scroll jump).
 const START_INDEX = 100_000;
+
+// Stable empty set so non-Photos views pass an identity-stable filter (see
+// `photoFilterIds`) and don't recreate the loaders on every attachment change.
+const EMPTY_IMAGE_IDS: Set<string> = new Set();
+
+// A one-shot request to bring a row into view: after a send (jump to the new
+// note) or a pinned-message jump (center it and flash a highlight).
+type ScrollTarget = {
+  id: string;
+  align: "center" | "end";
+  highlight: boolean;
+};
 
 export function MessageList({
   messages,
@@ -113,19 +125,20 @@ export function MessageList({
   // Mirrors `docs` so loadOlder can measure how many rows a page prepends
   // without recreating the callback on every change.
   const docsRef = useRef<RxDocument<MessageDoc>[]>([]);
+  // Earliest time auto-loading older history is allowed. Set a beat after each
+  // fresh load so Virtuoso's initial measurement (which can briefly report the
+  // top) doesn't immediately trigger a history fetch on view switch.
+  const historyReadyAtRef = useRef(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [liveAfter, setLiveAfter] = useState<number | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const [sentMessageId, setSentMessageId] = useState<string | null>(null);
-  const [pendingPinnedFocusId, setPendingPinnedFocusId] = useState<
-    string | null
-  >(null);
+  // One-shot scroll request, drained by the effect below once the row exists.
+  const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   // Virtuoso is mounted only once the first page has resolved, so its
   // initialTopMostItemIndex sees the real row count and opens at the newest note.
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
-  const [autoHistoryEnabled, setAutoHistoryEnabled] = useState(false);
 
   useEffect(() => {
     // id → name map for the header and smart-view per-note badges.
@@ -175,6 +188,14 @@ export function MessageList({
     return ids;
   }, [attachmentsByMessage]);
 
+  // `matchesView` only consults this for the Photos view; every other view
+  // ignores it. Gating it on the view keeps an unrelated attachment write (your
+  // own, or one synced in) from churning `imageMessageIds`' identity and so
+  // recreating the loaders below — which would reset and reload the timeline,
+  // momentarily wiping a just-sent note. The stable empty set means non-Photos
+  // views never reload on attachment changes.
+  const photoFilterIds = view === PHOTOS_ID ? imageMessageIds : EMPTY_IMAGE_IDS;
+
   useEffect(() => {
     docsRef.current = docs;
   }, [docs]);
@@ -190,14 +211,15 @@ export function MessageList({
     setInitialLoadDone(false);
     setFirstItemIndex(START_INDEX);
 
-    const page = await fetchPage(messages, view, imageMessageIds, null);
+    const page = await fetchPage(messages, view, photoFilterIds, null);
     if (requestId !== requestIdRef.current) return;
     oldestCursorRef.current = page.nextCursor;
     setDocs(page.docs);
     setHasMore(page.hasMore);
     setLiveAfter(page.docs.at(-1)?.createdAt ?? Date.now());
     setInitialLoadDone(true);
-  }, [imageMessageIds, messages, view]);
+    historyReadyAtRef.current = Date.now() + 250;
+  }, [photoFilterIds, messages, view]);
 
   useEffect(() => {
     void loadInitial();
@@ -210,7 +232,7 @@ export function MessageList({
     loadingOlderRef.current = true;
     setLoadingOlder(true);
     try {
-      const page = await fetchPage(messages, view, imageMessageIds, cursor);
+      const page = await fetchPage(messages, view, photoFilterIds, cursor);
       oldestCursorRef.current = page.nextCursor;
       setHasMore(page.hasMore);
       // How many rows land at the front (older messages can add day headers).
@@ -225,7 +247,7 @@ export function MessageList({
       loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  }, [hasMore, imageMessageIds, messages, view]);
+  }, [hasMore, photoFilterIds, messages, view]);
 
   useEffect(() => {
     if (liveAfter === null) return;
@@ -236,62 +258,51 @@ export function MessageList({
       })
       .$.subscribe((found) => {
         const next = found.filter((doc) =>
-          matchesView(view, doc, imageMessageIds),
+          matchesView(view, doc, photoFilterIds),
         );
         if (next.length === 0) return;
         setDocs((prev) => mergeDocs(prev, next));
       });
     return () => sub.unsubscribe();
-  }, [imageMessageIds, liveAfter, messages, view]);
+  }, [photoFilterIds, liveAfter, messages, view]);
 
   const rows = useMemo(() => rowsByDay(docs), [docs]);
 
+  // Drain a one-shot scroll request once its row is present. `rows` is a
+  // dependency so a target set before the row exists (e.g. a freshly sent note
+  // still settling into the list) resolves on the render that includes it.
   useEffect(() => {
-    if (!sentMessageId) return;
+    if (!scrollTarget) return;
     const index = rows.findIndex(
-      (row) => row.type === "message" && row.doc.id === sentMessageId,
-    );
-    if (index === -1) {
-      setSentMessageId(null);
-      return;
-    }
-    virtuosoRef.current?.scrollToIndex({
-      index,
-      align: "end",
-      behavior: "smooth",
-    });
-    setSentMessageId(null);
-  }, [rows, sentMessageId]);
-
-  useEffect(() => {
-    if (!pendingPinnedFocusId) return;
-    const index = rows.findIndex(
-      (row) => row.type === "message" && row.doc.id === pendingPinnedFocusId,
+      (row) => row.type === "message" && row.doc.id === scrollTarget.id,
     );
     if (index === -1) return;
     virtuosoRef.current?.scrollToIndex({
       index,
-      align: "center",
+      align: scrollTarget.align,
       behavior: "smooth",
     });
-    setHighlightedId(pendingPinnedFocusId);
-    const handle = window.setTimeout(() => setHighlightedId(null), 1500);
-    setPendingPinnedFocusId(null);
-    return () => window.clearTimeout(handle);
-  }, [pendingPinnedFocusId, rows]);
+    if (scrollTarget.highlight) setHighlightedId(scrollTarget.id);
+    setScrollTarget(null);
+  }, [rows, scrollTarget]);
 
+  // A single timer owns clearing the highlight pulse. Keeping it separate from
+  // the effects that *start* the pulse avoids the trap where re-running an
+  // effect to clear its trigger also fires its cleanup, cancelling the timeout
+  // before the highlight is ever seen.
   useEffect(() => {
-    // Briefly ignore startReached after a view switch so Virtuoso's initial
-    // measurement (which can momentarily report the top) doesn't trigger a load.
-    setAutoHistoryEnabled(false);
-    const handle = window.setTimeout(() => setAutoHistoryEnabled(true), 250);
+    if (!highlightedId) return;
+    const handle = window.setTimeout(() => setHighlightedId(null), 1500);
     return () => window.clearTimeout(handle);
-  }, [view]);
+  }, [highlightedId]);
 
   const handleStartReached = useCallback(() => {
-    if (!autoHistoryEnabled || loadingOlderRef.current || !hasMore) return;
+    if (Date.now() < historyReadyAtRef.current || loadingOlderRef.current) {
+      return;
+    }
+    if (!hasMore) return;
     void loadOlder();
-  }, [autoHistoryEnabled, hasMore, loadOlder]);
+  }, [hasMore, loadOlder]);
 
   const meta = headerMeta(view, channelNames, counts);
   const currentChannel = smartView
@@ -335,21 +346,20 @@ export function MessageList({
     };
   }, [currentPinnedMessageIds, messages]);
 
+  // A note targeted from elsewhere (e.g. a search result) routes through the
+  // same scroll + highlight path. Firing only on the prop (not on `rows`) means
+  // it requests the jump once; the scroll effect above retries against `rows`
+  // until the row loads, then clears it — so an unrelated later list change
+  // can't yank the viewport back to a stale target.
   useEffect(() => {
-    if (!focusedMessageId) return;
-    const index = rows.findIndex(
-      (row) => row.type === "message" && row.doc.id === focusedMessageId,
-    );
-    if (index === -1) return;
-    virtuosoRef.current?.scrollToIndex({
-      index,
-      align: "center",
-      behavior: "smooth",
-    });
-    setHighlightedId(focusedMessageId);
-    const handle = window.setTimeout(() => setHighlightedId(null), 1500);
-    return () => window.clearTimeout(handle);
-  }, [focusedMessageId, rows]);
+    if (focusedMessageId) {
+      setScrollTarget({
+        id: focusedMessageId,
+        align: "center",
+        highlight: true,
+      });
+    }
+  }, [focusedMessageId]);
 
   function addFiles(files: File[]) {
     // ATT-3: stage each file with an instant local thumbnail, then upload its
@@ -453,9 +463,9 @@ export function MessageList({
       });
     }
     clearPending();
-    if (matchesView(view, inserted, imageMessageIds)) {
+    if (matchesView(view, inserted, photoFilterIds)) {
       setDocs((prev) => mergeDocs(prev, [inserted]));
-      setSentMessageId(inserted.id);
+      setScrollTarget({ id: inserted.id, align: "end", highlight: false });
     }
     // Remount the composer to clear it and put the caret back.
     setComposerKey((k) => k + 1);
@@ -473,11 +483,11 @@ export function MessageList({
         updatedAt: Date.now(),
       });
       setDocs((prev) => {
-        return matchesView(view, updated, imageMessageIds)
+        return matchesView(view, updated, photoFilterIds)
           ? mergeDocs(
-            prev.filter((item) => item.id !== updated.id),
-            [updated],
-          )
+              prev.filter((item) => item.id !== updated.id),
+              [updated],
+            )
           : prev.filter((item) => item.id !== updated.id);
       });
       return;
@@ -522,11 +532,11 @@ export function MessageList({
       updatedAt: Date.now(),
     });
     setDocs((prev) => {
-      return matchesView(view, updated, imageMessageIds)
+      return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
     cancelEdit();
@@ -538,11 +548,11 @@ export function MessageList({
       updatedAt: Date.now(),
     });
     setDocs((prev) => {
-      return matchesView(view, updated, imageMessageIds)
+      return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -556,11 +566,11 @@ export function MessageList({
       updatedAt: Date.now(),
     });
     setDocs((prev) => {
-      return matchesView(view, updated, imageMessageIds)
+      return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -582,11 +592,11 @@ export function MessageList({
       updatedAt: Date.now(),
     });
     setDocs((prev) => {
-      return matchesView(view, updated, imageMessageIds)
+      return matchesView(view, updated, photoFilterIds)
         ? mergeDocs(
-          prev.filter((item) => item.id !== updated.id),
-          [updated],
-        )
+            prev.filter((item) => item.id !== updated.id),
+            [updated],
+          )
         : prev.filter((item) => item.id !== updated.id);
     });
   }
@@ -608,7 +618,7 @@ export function MessageList({
       if (prev.some((doc) => doc.id === message.id)) return prev;
       return mergeDocs(prev, [message]);
     });
-    setPendingPinnedFocusId(message.id);
+    setScrollTarget({ id: message.id, align: "center", highlight: true });
   }
 
   return (
@@ -714,16 +724,16 @@ export function MessageList({
               actions={[
                 ...(currentChannel
                   ? [
-                    {
-                      label: currentPinnedSet.has(target.id)
-                        ? "Unpin"
-                        : "Pin",
-                      Icon: currentPinnedSet.has(target.id)
-                        ? IconPinOff
-                        : IconPin,
-                      onSelect: () => void togglePin(target),
-                    },
-                  ]
+                      {
+                        label: currentPinnedSet.has(target.id)
+                          ? "Unpin"
+                          : "Pin",
+                        Icon: currentPinnedSet.has(target.id)
+                          ? IconPinOff
+                          : IconPin,
+                        onSelect: () => void togglePin(target),
+                      },
+                    ]
                   : []),
                 {
                   label: "Edit channels",
