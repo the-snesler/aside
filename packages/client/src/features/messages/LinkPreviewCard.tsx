@@ -18,7 +18,7 @@ export function LinkPreviewCard({ embed, onPreviewImage }: Props) {
       href={embed.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-1.5 flex max-w-md gap-3 overflow-hidden rounded-xl border border-l-[3px] border-divider border-l-accent bg-panel p-3 no-underline shadow-sm transition-colors hover:bg-hover"
+      className="mt-1.5 flex max-w-md gap-3 relative overflow-hidden rounded-xl border border-divider/50 bg-panel p-3 no-underline shadow-sm transition-colors hover:bg-hover"
     >
       <div className="min-w-0 flex-1">
         {embed.siteName && (
@@ -30,7 +30,7 @@ export function LinkPreviewCard({ embed, onPreviewImage }: Props) {
           <div className="truncate font-medium text-ink">{embed.title}</div>
         )}
         {embed.description && (
-          <p className="mt-0.5 line-clamp-2 text-sm text-muted">
+          <p className="mt-0.5 line-clamp-6 text-sm text-muted">
             {embed.description}
           </p>
         )}

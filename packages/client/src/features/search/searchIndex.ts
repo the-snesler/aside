@@ -30,6 +30,7 @@ export interface SearchNote {
   text: string;
   previewText: string;
   fileNames: string;
+  snippetText: string;
   terms: string[];
   score: number;
 }
@@ -39,7 +40,7 @@ export interface SearchResults {
   notes: SearchNote[];
 }
 
-interface SearchDoc {
+export interface SearchDoc {
   id: string;
   channelIds: string[];
   createdAt: number;
@@ -58,6 +59,11 @@ const SEARCH_OPTIONS = {
   },
 } as const;
 
+export interface SearchIndexState {
+  index: MiniSearch<SearchDoc>;
+  docs: Map<string, SearchDoc>;
+}
+
 export function useSearchIndex(db: AsideDatabase): {
   channels: SearchChannel[];
   search: (query: string, options: SearchOptions) => SearchResults;
@@ -68,10 +74,9 @@ export function useSearchIndex(db: AsideDatabase): {
     [],
   );
   const [channels, setChannels] = useState<RxDocument<ChannelDoc>[]>([]);
-  const [indexState, setIndexState] = useState<{
-    index: MiniSearch<SearchDoc>;
-    docs: Map<string, SearchDoc>;
-  }>(() => buildIndex([]));
+  const [indexState, setIndexState] = useState<SearchIndexState>(() =>
+    buildIndex([]),
+  );
 
   useEffect(() => {
     const subs = [
@@ -129,16 +134,7 @@ export function useSearchIndex(db: AsideDatabase): {
       .filter((channel) => channel.name.toLowerCase().includes(lower))
       .slice(0, 6);
 
-    const rawResults = indexRef.current.index.search(trimmed, SEARCH_OPTIONS);
-    const notes = rawResults
-      .map((result) => toSearchNote(result, indexRef.current.docs))
-      .filter((note): note is SearchNote => {
-        if (!note) return false;
-        return (
-          !options.scopeChannelId ||
-          note.channelIds.includes(options.scopeChannelId)
-        );
-      });
+    const notes = searchNotes(indexRef.current, trimmed, options);
 
     return {
       channels: matchedChannels,
@@ -149,10 +145,10 @@ export function useSearchIndex(db: AsideDatabase): {
   return { channels: searchChannels, search };
 }
 
-function assembleSearchDocs(
-  messages: RxDocument<MessageDoc>[],
-  embeds: RxDocument<EmbedDoc>[],
-  attachments: RxDocument<AttachmentDoc>[],
+export function assembleSearchDocs(
+  messages: readonly MessageDoc[],
+  embeds: readonly EmbedDoc[],
+  attachments: readonly AttachmentDoc[],
 ): SearchDoc[] {
   const embedsByMessage = new Map<string, EmbedDoc[]>();
   for (const embed of embeds) {
@@ -183,10 +179,7 @@ function assembleSearchDocs(
   }));
 }
 
-function buildIndex(docs: SearchDoc[]): {
-  index: MiniSearch<SearchDoc>;
-  docs: Map<string, SearchDoc>;
-} {
+export function buildIndex(docs: SearchDoc[]): SearchIndexState {
   const index = new MiniSearch<SearchDoc>({
     fields: ["text", "previewText", "fileNames"],
     storeFields: ["id"],
@@ -198,6 +191,23 @@ function buildIndex(docs: SearchDoc[]): {
   };
 }
 
+export function searchNotes(
+  state: SearchIndexState,
+  query: string,
+  options: { scopeChannelId?: string },
+): SearchNote[] {
+  return state.index
+    .search(query, SEARCH_OPTIONS)
+    .map((result) => toSearchNote(result, state.docs))
+    .filter((note): note is SearchNote => {
+      if (!note) return false;
+      return (
+        !options.scopeChannelId ||
+        note.channelIds.includes(options.scopeChannelId)
+      );
+    });
+}
+
 function toSearchNote(
   result: SearchResult,
   docs: Map<string, SearchDoc>,
@@ -206,9 +216,21 @@ function toSearchNote(
   if (!doc) return null;
   return {
     ...doc,
+    snippetText: pickSnippetText(doc, result.terms),
     terms: result.terms,
     score: result.score,
   };
+}
+
+function pickSnippetText(doc: SearchDoc, terms: string[]): string {
+  const candidates = [doc.text, doc.previewText, doc.fileNames].filter(Boolean);
+  return (
+    candidates.find((candidate) =>
+      terms.some((term) => candidate.toLowerCase().includes(term)),
+    ) ??
+    candidates[0] ??
+    ""
+  );
 }
 
 function sortNotes(notes: SearchNote[], sort: SearchSort): SearchNote[] {

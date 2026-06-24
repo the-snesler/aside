@@ -295,10 +295,7 @@ function NoteRow({
   active: boolean;
   onSelect: () => void;
 }) {
-  const snippet = buildSnippet(
-    note.text || note.previewText || note.fileNames,
-    note.terms,
-  );
+  const snippet = buildSnippet(note.snippetText, note.terms);
   return (
     <button
       type="button"
