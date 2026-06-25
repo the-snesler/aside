@@ -49,7 +49,9 @@ describe("computeFeedUnread", () => {
     const result = computeFeedUnread(
       [message({ updatedAt: 20 })],
       [feed({})],
-      readMarkers([config({ value: JSON.stringify({ lastSeenUpdatedAt: 10 }) })]),
+      readMarkers([
+        config({ value: JSON.stringify({ lastSeenUpdatedAt: 10 }) }),
+      ]),
     );
 
     expect(result.unreadChannelIds.has("links")).toBe(true);

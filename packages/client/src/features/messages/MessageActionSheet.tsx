@@ -38,7 +38,7 @@ export function MessageActionSheet({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex flex-col justify-end bg-black/30 transition-opacity duration-200 ${
+      className={`fixed inset-0 z-50 flex flex-col justify-end bg-black/30 transition-opacity duration-200 select-none ${
         shown ? "opacity-100" : "opacity-0"
       }`}
       onMouseDown={onClose}

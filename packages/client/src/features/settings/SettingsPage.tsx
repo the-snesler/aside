@@ -72,44 +72,44 @@ const sections: Array<{
   description: string;
   icon: React.ReactNode;
 }> = [
-    {
-      id: "ai",
-      title: "Ambient AI",
-      description:
-        "Background bots that auto-organize notes and describe channels.",
-      icon: <IconSparkles className="h-5 w-5" />,
-    },
-    {
-      id: "feeds",
-      title: "Feeds",
-      description: "Sources, schedules, sessions, and refresh status.",
-      icon: <IconRss className="h-5 w-5" />,
-    },
-    {
-      id: "appearance",
-      title: "Appearance",
-      description: "Theme, density, and display preferences.",
-      icon: <IconPalette className="h-5 w-5" />,
-    },
-    {
-      id: "storage",
-      title: "Storage",
-      description: "Local database, sync status, and attachment cache.",
-      icon: <IconDatabase className="h-5 w-5" />,
-    },
-    {
-      id: "notifications",
-      title: "Notifications",
-      description: "Device alerts and install-time permissions.",
-      icon: <IconBell className="h-5 w-5" />,
-    },
-    {
-      id: "security",
-      title: "Security",
-      description: "Password and session protection.",
-      icon: <IconLock className="h-5 w-5" />,
-    },
-  ];
+  {
+    id: "ai",
+    title: "Ambient AI",
+    description:
+      "Background bots that auto-organize notes and describe channels.",
+    icon: <IconSparkles className="h-5 w-5" />,
+  },
+  {
+    id: "feeds",
+    title: "Feeds",
+    description: "Sources, schedules, sessions, and refresh status.",
+    icon: <IconRss className="h-5 w-5" />,
+  },
+  {
+    id: "appearance",
+    title: "Appearance",
+    description: "Theme, density, and display preferences.",
+    icon: <IconPalette className="h-5 w-5" />,
+  },
+  {
+    id: "storage",
+    title: "Storage",
+    description: "Local database, sync status, and attachment cache.",
+    icon: <IconDatabase className="h-5 w-5" />,
+  },
+  {
+    id: "notifications",
+    title: "Notifications",
+    description: "Device alerts and install-time permissions.",
+    icon: <IconBell className="h-5 w-5" />,
+  },
+  {
+    id: "security",
+    title: "Security",
+    description: "Password and session protection.",
+    icon: <IconLock className="h-5 w-5" />,
+  },
+];
 
 export function SettingsPage({
   channels,
@@ -145,10 +145,11 @@ export function SettingsPage({
                 key={section.id}
                 type="button"
                 onClick={() => setActiveSection(section.id)}
-                className={`flex min-w-[180px] items-start gap-3 rounded-lg px-3 py-3 text-left transition md:min-w-0 ${section.id === activeSection
-                  ? "bg-active text-ink"
-                  : "text-muted hover:bg-hover hover:text-ink"
-                  }`}
+                className={`flex min-w-[180px] items-start gap-3 rounded-lg px-3 py-3 text-left transition md:min-w-0 ${
+                  section.id === activeSection
+                    ? "bg-active text-ink"
+                    : "text-muted hover:bg-hover hover:text-ink"
+                }`}
               >
                 <span className="mt-0.5 shrink-0 text-accent">
                   {section.icon}
@@ -242,10 +243,11 @@ function AppearanceSettings({ config }: { config: ConfigCollection }) {
               key={preset.id}
               type="button"
               onClick={() => void saveThemePalette(config, preset.palette)}
-              className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition hover:border-accent ${activePreset?.id === preset.id
-                ? "border-accent ring-1 ring-accent"
-                : "border-divider"
-                }`}
+              className={`flex flex-col gap-2 rounded-lg border p-2 text-left transition hover:border-accent ${
+                activePreset?.id === preset.id
+                  ? "border-accent ring-1 ring-accent"
+                  : "border-divider"
+              }`}
             >
               <PresetSwatch palette={preset.palette} />
               <span className="text-xs font-medium text-ink">
@@ -643,8 +645,9 @@ function AttachmentTile({
   const isImage = att.mimeType.startsWith("image/");
   return (
     <div
-      className={`relative overflow-hidden rounded-lg border bg-rail ${selected ? "border-accent ring-1 ring-accent" : "border-divider"
-        }`}
+      className={`relative overflow-hidden rounded-lg border bg-rail ${
+        selected ? "border-accent ring-1 ring-accent" : "border-divider"
+      }`}
     >
       <label className="absolute left-2 top-2 z-10 flex cursor-pointer rounded bg-panel/80 p-0.5 shadow-sm">
         <input

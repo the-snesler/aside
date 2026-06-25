@@ -29,7 +29,9 @@ function graceMs(): number {
  *
  * Pass `now` to make the cutoff deterministic in tests.
  */
-export async function runBlobGc(now: number = Date.now()): Promise<BlobGcResult> {
+export async function runBlobGc(
+  now: number = Date.now(),
+): Promise<BlobGcResult> {
   const driver = getBlobDriver();
 
   // The blobs every live attachment depends on.

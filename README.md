@@ -21,7 +21,6 @@ Aside is a local-first notetaking app. Sometimes, when you just want to save an 
 
 <img width="1440" alt="image" src="https://github.com/user-attachments/assets/67fcdaef-d339-4798-8837-432bd3d9df2c" />
 
-
 ### Self-hosting
 
 Aside runs as a single Docker Compose service with SQLite, blobs, and feed data

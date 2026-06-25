@@ -164,10 +164,11 @@ export function ThemeStudio({
             return (
               <span
                 key={dot.key}
-                className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-md ${dot.primary
+                className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-md ${
+                  dot.primary
                     ? "h-9 w-9 border-[3px] border-white ring-1 ring-black/10"
                     : "h-6 w-6 border-2 border-white/80"
-                  }`}
+                }`}
                 style={{
                   left: `${50 + dx}%`,
                   top: `${50 + dy}%`,
@@ -247,10 +248,11 @@ export function ThemeStudio({
                 type="button"
                 aria-label={`Use ${color} as the primary`}
                 onClick={() => edit((r) => ({ ...r, primary: color }))}
-                className={`h-7 w-7 rounded-full border transition hover:scale-110 ${recipe.primary.toLowerCase() === color.toLowerCase()
+                className={`h-7 w-7 rounded-full border transition hover:scale-110 ${
+                  recipe.primary.toLowerCase() === color.toLowerCase()
                     ? "border-ink ring-2 ring-accent"
                     : "border-divider"
-                  }`}
+                }`}
                 style={{ backgroundColor: color }}
               />
             ))}

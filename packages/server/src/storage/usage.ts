@@ -38,7 +38,8 @@ export async function getStorageUsage(): Promise<StorageUsage> {
     .execute();
 
   const buckets = new Map<BlobCategory, { count: number; bytes: number }>();
-  for (const category of CATEGORY_ORDER) buckets.set(category, { count: 0, bytes: 0 });
+  for (const category of CATEGORY_ORDER)
+    buckets.set(category, { count: 0, bytes: 0 });
   let totalCount = 0;
   let totalBytes = 0;
   for (const blob of blobs) {

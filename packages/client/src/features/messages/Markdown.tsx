@@ -17,7 +17,10 @@ type HastNode = {
 // Toggle the first GFM task marker (`[ ]` / `[x]`) at or after `offset` in the
 // source markdown. The list item's source position starts at its bullet, so the
 // next marker is this item's own checkbox — nested children carry their own.
-export function toggleTaskMarker(source: string, offset: number): string | null {
+export function toggleTaskMarker(
+  source: string,
+  offset: number,
+): string | null {
   const re = /\[[ xX]\]/g;
   re.lastIndex = offset;
   const match = re.exec(source);

@@ -73,7 +73,10 @@ describe("storage api (HTTP)", () => {
       .png()
       .toBuffer();
     await uploadBlob(png, "image/png");
-    await uploadBlob(Buffer.from("%PDF-1.4 not really a pdf"), "application/pdf");
+    await uploadBlob(
+      Buffer.from("%PDF-1.4 not really a pdf"),
+      "application/pdf",
+    );
 
     const res = await app.request("/api/storage/usage", auth());
     expect(res.status).toBe(200);

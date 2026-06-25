@@ -125,5 +125,9 @@ export async function getOrCreateThumbnail(
     .onConflict((oc) => oc.columns(["source_hash", "width"]).doNothing())
     .execute();
 
-  return { hash: thumbHash, contentType: THUMBNAIL_CONTENT_TYPE, bytes: out.data };
+  return {
+    hash: thumbHash,
+    contentType: THUMBNAIL_CONTENT_TYPE,
+    bytes: out.data,
+  };
 }

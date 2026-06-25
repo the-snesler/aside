@@ -32,8 +32,7 @@ function embed(overrides: Partial<EmbedDoc> = {}): EmbedDoc {
 describe("search index", () => {
   it("searches embed text attached to a message", () => {
     const docs = assembleSearchDocs([message()], [embed()], []);
-    const results = searchNotes(buildIndex(docs), "sourdough", {
-    });
+    const results = searchNotes(buildIndex(docs), "sourdough", {});
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({

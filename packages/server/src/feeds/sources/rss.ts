@@ -26,7 +26,9 @@ export const rssSource: FeedSource = {
     if (!url) throw new Error("RSS feed URL is required.");
 
     const res = await fetch(url, {
-      headers: { accept: "application/rss+xml, application/atom+xml, text/xml" },
+      headers: {
+        accept: "application/rss+xml, application/atom+xml, text/xml",
+      },
       redirect: "follow",
     });
     if (!res.ok) throw new Error(`RSS fetch failed: ${res.status}`);
@@ -45,9 +47,7 @@ export function parseRssFeed(
 
   const maxItems = numberOption(feed.options.maxItems, DEFAULT_MAX_ITEMS);
   const stopAtId =
-    typeof feed.cursor?.lastItemId === "string"
-      ? feed.cursor.lastItemId
-      : null;
+    typeof feed.cursor?.lastItemId === "string" ? feed.cursor.lastItemId : null;
 
   const parsed = parser.parse(xml) as XmlRecord;
   const rawItems = extractEntries(parsed);

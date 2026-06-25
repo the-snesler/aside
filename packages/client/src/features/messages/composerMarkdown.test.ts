@@ -52,18 +52,36 @@ describe("continueList", () => {
   });
 
   it("increments numbered markers", () => {
-    expect(continueList("1. first")).toEqual({ kind: "continue", prefix: "2. " });
-    expect(continueList("9. ninth")).toEqual({ kind: "continue", prefix: "10. " });
+    expect(continueList("1. first")).toEqual({
+      kind: "continue",
+      prefix: "2. ",
+    });
+    expect(continueList("9. ninth")).toEqual({
+      kind: "continue",
+      prefix: "10. ",
+    });
   });
 
   it("continues task items as unchecked", () => {
-    expect(continueList("- [ ] todo")).toEqual({ kind: "continue", prefix: "- [ ] " });
-    expect(continueList("- [x] done")).toEqual({ kind: "continue", prefix: "- [ ] " });
-    expect(continueList("1. [X] done")).toEqual({ kind: "continue", prefix: "2. [ ] " });
+    expect(continueList("- [ ] todo")).toEqual({
+      kind: "continue",
+      prefix: "- [ ] ",
+    });
+    expect(continueList("- [x] done")).toEqual({
+      kind: "continue",
+      prefix: "- [ ] ",
+    });
+    expect(continueList("1. [X] done")).toEqual({
+      kind: "continue",
+      prefix: "2. [ ] ",
+    });
   });
 
   it("preserves indentation", () => {
-    expect(continueList("  - nested")).toEqual({ kind: "continue", prefix: "  - " });
+    expect(continueList("  - nested")).toEqual({
+      kind: "continue",
+      prefix: "  - ",
+    });
   });
 
   it("exits on an empty item", () => {
