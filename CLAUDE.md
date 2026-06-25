@@ -90,6 +90,26 @@ Run from the repo root:
 - `pnpm test` — Vitest (`shared` contract/conflict tests; `server` sync/ingest/embed tests).
 - `pnpm format` — Prettier.
 
+## Dev scripts
+
+A fresh worktree's database is empty, which means a blank password-setup
+screen and no notes to look at. Two scripts under `scripts/` handle that
+without hand-rolling Playwright for every task:
+
+- `pnpm seed` (`scripts/seed.mjs`) — claims the owner password (`admin`, the
+  dev convention above) against a running server and pushes a few example
+  channels/notes through the same sync `/push` endpoint the client uses. Safe
+  to re-run: it logs in instead of erroring once setup is done, and re-seeding
+  the same ids is a no-op. Needs the server up (`pnpm dev`); override the
+  target with `ASIDE_SERVER_URL` / `ASIDE_PASSWORD`.
+- `pnpm screenshot` (`scripts/screenshot.mjs`) — opens the client in headless
+  Chromium, logs in if needed, and saves a PNG (default
+  `scripts/screenshot.png`, or pass a path as the first arg). Needs the client
+  up too; override with `ASIDE_CLIENT_URL` / `ASIDE_PASSWORD`.
+
+Typical flow for a task that needs to look at the UI: `pnpm dev` in the
+background, then `pnpm seed`, then `pnpm screenshot [path]`.
+
 ## Architecture notes
 
 - **Generic sync**: every synced collection goes through one set of
