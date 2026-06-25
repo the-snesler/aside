@@ -140,6 +140,12 @@ export function MessageList({
   const [hasMore, setHasMore] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [liveAfter, setLiveAfter] = useState<number | null>(null);
+  // True when the initial load found an empty *collection* — i.e. a fresh client
+  // whose first replication pull hasn't landed yet. Such a load anchors the live
+  // tail at "now", so notes that sync in afterward (all with past createdAts)
+  // would match neither the empty snapshot nor the live tail. We re-run the load
+  // once the first document arrives. See the recovery effect below.
+  const [awaitingFirstData, setAwaitingFirstData] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   // One-shot scroll request, drained by the effect below once the row exists.
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
@@ -227,11 +233,38 @@ export function MessageList({
     setLiveAfter(page.docs.at(-1)?.createdAt ?? Date.now());
     setInitialLoadDone(true);
     historyReadyAtRef.current = Date.now() + 250;
+
+    // An empty page on a populated collection just means this view has no notes;
+    // an empty page on an *empty* collection means we're a fresh client still
+    // waiting on the first sync. Only the latter needs the reload-on-arrival
+    // recovery, so it never fires for a genuinely empty channel or interferes
+    // with sending the first note on an already-synced client.
+    if (page.docs.length > 0) {
+      setAwaitingFirstData(false);
+    } else {
+      const existing = await messages.findOne().exec();
+      if (requestId !== requestIdRef.current) return;
+      setAwaitingFirstData(!existing);
+    }
   }, [photoFilterIds, messages, view]);
 
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
+
+  // Recovery for the fresh-client case: while the collection is still empty,
+  // watch for the first synced document and re-run the initial load so the
+  // streamed-in history (and any note pushed from another device) actually
+  // renders without a manual re-navigation. loadInitial clears the flag once it
+  // sees data, unsubscribing us; a genuinely empty view never trips this because
+  // findOne() above leaves awaitingFirstData false when other notes exist.
+  useEffect(() => {
+    if (!awaitingFirstData) return;
+    const sub = messages.find().$.subscribe((found) => {
+      if (found.length > 0) void loadInitial();
+    });
+    return () => sub.unsubscribe();
+  }, [awaitingFirstData, messages, loadInitial]);
 
   const loadOlder = useCallback(async () => {
     if (loadingOlderRef.current || !hasMore) return;

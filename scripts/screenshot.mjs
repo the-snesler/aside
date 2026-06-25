@@ -19,7 +19,12 @@ const PASSWORD = process.env.ASIDE_PASSWORD ?? "admin";
 const OUTPUT_PATH = process.argv[2] ?? "scripts/screenshot.png";
 const COMPOSER = '[contenteditable="true"]';
 const EMPTY_STATE_TEXT = /no notes (here|in this channel) yet/i;
-const MAX_RELOADS = 2;
+// How long to keep waiting for a note row after the empty state shows. A fresh
+// profile flashes "no notes" for a beat before its first replication pull lands,
+// then the app swaps in the synced notes on its own (MessageList's recovery
+// effect). This grace gives that self-heal time to happen; a genuinely empty
+// workspace just rides it out and screenshots empty.
+const SELF_HEAL_GRACE_MS = 4000;
 
 async function main() {
   const browser = await chromium.launch();
@@ -34,20 +39,14 @@ async function main() {
     await page.goto(CLIENT_URL, { waitUntil: "load" });
     await login(page);
     await page.locator(COMPOSER).first().waitFor({ timeout: 15_000 });
-    await waitForListToSettle(page);
 
-    // A brand-new browser profile's first mount races RxDB's initial
-    // replication pull: the message list loads from local storage once on
-    // mount, and if that fires before historical notes have synced in, it
-    // never retries — so a cold profile can get stuck showing "no notes" even
-    // after the data has landed locally a moment later. Reloading re-mounts
-    // against the now-warmer local copy; retry a couple of times in case the
-    // sync itself is still catching up.
-    for (
-      let attempt = 0;
-      attempt < MAX_RELOADS && !(await hasNotes(page));
-      attempt++
-    ) {
+    // A brand-new browser profile's first mount races RxDB's initial replication
+    // pull, so the list can flash "no notes" before history syncs in. The app
+    // now repopulates itself once that data arrives (MessageList's recovery
+    // effect), so the normal path never needs a reload — `waitForListToSettle`
+    // simply waits the synced notes in. Reload only as a last resort, if the
+    // list never rendered at all (a genuine hang).
+    if (!(await waitForListToSettle(page))) {
       await page.reload({ waitUntil: "load" });
       await page.locator(COMPOSER).first().waitFor({ timeout: 15_000 });
       await waitForListToSettle(page);
@@ -95,12 +94,29 @@ function noteRow(page) {
   return page.locator('main [draggable="true"]').first();
 }
 
-/** Waits for the message list's first load attempt to resolve, one way or another. */
+/**
+ * Waits for the message list to reach a stable state and reports whether it got
+ * there. A note row or the empty state both mean the list mounted and finished
+ * its first load. Because a cold profile can show the empty state for a beat
+ * before notes sync in, we wait out a short grace for the app to repopulate
+ * before accepting "empty". Returns false only if the list never rendered at all
+ * (a genuine hang), so the caller can decide whether a reload is warranted.
+ */
 async function waitForListToSettle(page) {
+  try {
+    await noteRow(page)
+      .or(page.getByText(EMPTY_STATE_TEXT))
+      .first()
+      .waitFor({ timeout: 15_000 });
+  } catch {
+    return false;
+  }
+  if (await hasNotes(page)) return true;
+  // Empty state is up; give the app's self-heal a beat to swap in synced notes.
   await noteRow(page)
-    .or(page.getByText(EMPTY_STATE_TEXT))
-    .first()
-    .waitFor({ timeout: 15_000 });
+    .waitFor({ timeout: SELF_HEAL_GRACE_MS })
+    .catch(() => {});
+  return true;
 }
 
 async function hasNotes(page) {
