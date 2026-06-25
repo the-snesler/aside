@@ -500,11 +500,7 @@ function StatusBadge({
   );
 }
 
-function toFeedInput(
-  type: string,
-  draft: FeedDraft,
-  channels: ChannelDoc[],
-) {
+function toFeedInput(type: string, draft: FeedDraft, channels: ChannelDoc[]) {
   const target = resolveFeedChannelTarget(draft.channelName, channels);
   if (!target) return null;
   const options = feedOptions(type, draft);
@@ -539,7 +535,9 @@ function parseCookies(raw: string): unknown[] {
   } catch {
     // handled below
   }
-  throw new Error("Cookies must be valid JSON (the array your extension exports).");
+  throw new Error(
+    "Cookies must be valid JSON (the array your extension exports).",
+  );
 }
 
 function draftFromFeed(feed: Feed): FeedDraft {
