@@ -361,14 +361,33 @@ export function MessageRow({
             <div className="mt-2 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => editorRef.current?.submit()}
+                // Slate keeps DOM focus on the editor; on mobile, the tap that
+                // blurs it to focus this button swallows the click that would
+                // follow (a WebKit/Chrome contenteditable quirk), so act on
+                // mousedown/touchstart instead — same fix as
+                // ChannelMentionDropdown's onSelect.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editorRef.current?.submit();
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  editorRef.current?.submit();
+                }}
                 className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
               >
                 Save
               </button>
               <button
                 type="button"
-                onClick={onCancelEdit}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onCancelEdit();
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  onCancelEdit();
+                }}
                 className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-hover hover:text-ink"
               >
                 Cancel
