@@ -204,6 +204,13 @@
     margin-right: 0.4rem;
   }
 
+  /* Checked task items: cross out and dim the text, leaving the checkbox itself
+     unaffected. */
+  .message-md li:has(> input[type="checkbox"]:checked) {
+    color: var(--color-muted);
+    text-decoration: line-through;
+  }
+
   .message-md blockquote {
     margin: 0.35rem 0;
     padding-left: 0.75rem;
