@@ -3,7 +3,7 @@ import "../test/env.js";
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, initDb } from "../db/index.js";
-import { runDueReminderSweep } from "./worker.js";
+import { runDueReminderSweep, tick } from "./worker.js";
 
 const h = vi.hoisted(() => ({
   sendPushToAll: vi.fn(),
@@ -91,6 +91,51 @@ describe("runDueReminderSweep", () => {
       delivered: 0,
     });
     expect(h.sendPushToAll).not.toHaveBeenCalled();
+  });
+});
+
+describe("tick", () => {
+  it("skips a second tick while the first sweep is still running", async () => {
+    await insertMessage({ id: "m1", dueAt: 1 });
+    let resolveStuck!: (result: {
+      success: number;
+      failure: number;
+      lastError: string | null;
+    }) => void;
+    const stuck = new Promise<{
+      success: number;
+      failure: number;
+      lastError: string | null;
+    }>((resolve) => {
+      resolveStuck = resolve;
+    });
+    h.sendPushToAll.mockReturnValue(stuck);
+
+    const first = tick();
+    await vi.waitFor(() => expect(h.sendPushToAll).toHaveBeenCalledTimes(1));
+
+    await tick();
+    expect(h.sendPushToAll).toHaveBeenCalledTimes(1);
+
+    resolveStuck({ success: 1, failure: 0, lastError: null });
+    await first;
+  });
+
+  it("swallows a sweep error and resets the running flag for the next tick", async () => {
+    await insertMessage({ id: "m1", dueAt: 1 });
+    h.sendPushToAll.mockRejectedValueOnce(new Error("boom"));
+
+    await expect(tick()).resolves.toBeUndefined();
+    expect(await deliveryIds()).toEqual([]);
+
+    h.sendPushToAll.mockResolvedValue({
+      success: 1,
+      failure: 0,
+      lastError: null,
+    });
+    await tick();
+
+    expect(await deliveryIds()).toEqual(["m1:1"]);
   });
 });
 

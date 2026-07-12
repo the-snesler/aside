@@ -4,12 +4,25 @@ import { sendPushToAll } from "../notifications/push.js";
 const SWEEP_INTERVAL_MS = 60 * 1000;
 
 let interval: ReturnType<typeof setInterval> | null = null;
+let running = false;
+
+export async function tick(): Promise<void> {
+  if (running) return;
+  running = true;
+  try {
+    await runDueReminderSweep();
+  } catch (err) {
+    console.error("[reminders] sweep failed:", err);
+  } finally {
+    running = false;
+  }
+}
 
 export function startReminderWorker(): void {
   if (interval) return;
-  void runDueReminderSweep();
+  void tick();
   interval = setInterval(() => {
-    void runDueReminderSweep();
+    void tick();
   }, SWEEP_INTERVAL_MS);
 }
 
