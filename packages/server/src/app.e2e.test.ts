@@ -41,6 +41,17 @@ function message(): ReplicatedMessageDoc {
   };
 }
 
+async function uploadBlob(contentType: string, body: string): Promise<string> {
+  const res = await app.request("/api/blobs", {
+    method: "POST",
+    body,
+    headers: { "content-type": contentType, authorization: `Bearer ${token}` },
+  });
+  expect(res.status).toBe(201);
+  const parsed = (await res.json()) as { hash: string };
+  return parsed.hash;
+}
+
 beforeAll(async () => {
   await initDb();
   app = createApp();
@@ -87,5 +98,39 @@ describe("app e2e (HTTP)", () => {
     };
     expect(result.documents.map((d) => d.id)).toContain(doc.id);
     expect(result.checkpoint?.seq).toBeGreaterThan(0);
+  });
+});
+
+describe("blob response hardening", () => {
+  it("serves an uploaded HTML blob as a nosniff attachment", async () => {
+    const hash = await uploadBlob("text/html", "<script>alert(1)</script>");
+    const res = await app.request(`/api/blobs/${hash}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-disposition")).toBe("attachment");
+  });
+
+  it("renders an uploaded PNG blob inline with nosniff", async () => {
+    const hash = await uploadBlob("image/png", "not-really-a-png-but-fine");
+    const res = await app.request(`/api/blobs/${hash}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-disposition")).toBe("inline");
+  });
+
+  it("treats an uploaded SVG blob as an attachment (script carve-out)", async () => {
+    const hash = await uploadBlob(
+      "image/svg+xml",
+      "<svg><script>alert(1)</script></svg>",
+    );
+    const res = await app.request(`/api/blobs/${hash}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toBe("attachment");
   });
 });

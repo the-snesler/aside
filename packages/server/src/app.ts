@@ -62,6 +62,29 @@ const STATIC_DIR = process.env.STATIC_DIR;
 
 const MAX_BLOB_BYTES = 25 * 1024 * 1024;
 
+// Content types safe to render inline in the browser. Everything else is served
+// as an attachment so an uploaded HTML/SVG/script payload can't execute on our
+// origin. Note: image/svg+xml is intentionally excluded (SVG can carry script).
+const INLINE_RENDERABLE = new Set<string>([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "video/mp4",
+  "video/webm",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "application/pdf",
+]);
+
+function contentDisposition(contentType: string): string {
+  // Strip any parameters (e.g. "; charset=utf-8") and lowercase for the check.
+  const base = contentType.split(";")[0].trim().toLowerCase();
+  return INLINE_RENDERABLE.has(base) ? "inline" : "attachment";
+}
+
 const AI_PROVIDERS = new Set<AiProvider>([
   "anthropic",
   "openai",
@@ -240,6 +263,8 @@ function registerBlobRoutes(app: Hono): void {
       headers: {
         "content-type": meta.content_type,
         "content-length": String(meta.size),
+        "content-disposition": contentDisposition(meta.content_type),
+        "x-content-type-options": "nosniff",
         // The URL is the content hash, so the bytes can never change.
         "cache-control": "public, max-age=31536000, immutable",
       },
@@ -259,6 +284,7 @@ function registerBlobRoutes(app: Hono): void {
       headers: {
         "content-type": thumb.contentType,
         "content-length": String(thumb.bytes.byteLength),
+        "x-content-type-options": "nosniff",
         // Keyed by the source hash + a fixed width set, so this is immutable too.
         "cache-control": "public, max-age=31536000, immutable",
       },
