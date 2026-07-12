@@ -7,6 +7,7 @@ import type {
   AttachmentCollection,
   ChannelCollection,
   ConfigCollection,
+  MessageCollection,
 } from "../../db/database";
 import { useDisplay, type DisplaySettings } from "../../appearance";
 import { useIsDemo } from "../../demo";
@@ -30,6 +31,7 @@ import {
   type ThemePalette,
 } from "../../theme";
 import { AiSettings } from "../ai/AiSettings";
+import { ExportSettings } from "../export/ExportSettings";
 import { FeedSettings } from "../feeds/FeedSettings";
 import { Segmented } from "./Segmented";
 import { ThemeStudio } from "./ThemeStudio";
@@ -41,6 +43,7 @@ import {
 } from "../notifications/api";
 import IconBell from "~icons/lucide/bell";
 import IconDatabase from "~icons/lucide/database";
+import IconDownload from "~icons/lucide/download";
 import IconFile from "~icons/lucide/file";
 import IconLock from "~icons/lucide/lock-keyhole";
 import IconMenu from "~icons/lucide/menu";
@@ -55,6 +58,7 @@ type SectionId =
   | "feeds"
   | "appearance"
   | "storage"
+  | "export"
   | "notifications"
   | "security";
 
@@ -62,6 +66,7 @@ interface Props {
   channels: ChannelCollection;
   config: ConfigCollection;
   attachments: AttachmentCollection;
+  messages: MessageCollection;
   onOpenMenu: () => void;
   onFeedsChanged?: () => Promise<void>;
 }
@@ -98,6 +103,12 @@ const sections: Array<{
     icon: <IconDatabase className="h-5 w-5" />,
   },
   {
+    id: "export",
+    title: "Export",
+    description: "Download all your notes as a Markdown file.",
+    icon: <IconDownload className="h-5 w-5" />,
+  },
+  {
     id: "notifications",
     title: "Notifications",
     description: "Device alerts and install-time permissions.",
@@ -115,6 +126,7 @@ export function SettingsPage({
   channels,
   config,
   attachments,
+  messages,
   onOpenMenu,
   onFeedsChanged,
 }: Props) {
@@ -195,6 +207,13 @@ export function SettingsPage({
             )}
             {activeSection === "storage" && (
               <StorageSettings attachments={attachments} />
+            )}
+            {activeSection === "export" && (
+              <ExportSettings
+                messages={messages}
+                channels={channels}
+                attachments={attachments}
+              />
             )}
             {activeSection === "notifications" && <NotificationSettings />}
             {activeSection === "security" &&

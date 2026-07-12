@@ -367,6 +367,7 @@ function Workspace({
               channels={db.channels}
               config={db.config}
               attachments={db.attachments}
+              messages={db.messages}
               onOpenMenu={() => setSidebarOpen(true)}
               onFeedsChanged={reloadFeeds}
             />
