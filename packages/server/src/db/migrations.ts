@@ -33,6 +33,15 @@ export async function runMigrations(db: Kysely<Database>): Promise<void> {
     .column("seq")
     .execute();
 
+  // The reminder sweep filters messages by deleted + due_at every 60s; this
+  // composite index keeps that scan off the full table.
+  await db.schema
+    .createIndex("messages_due_at")
+    .ifNotExists()
+    .on("messages")
+    .columns(["deleted", "due_at"])
+    .execute();
+
   // Channels sync through the same protocol, so they get the same shape: a
   // server-owned seq cursor and a soft-delete flag. New table — no backfill.
   await db.schema
