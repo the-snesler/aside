@@ -40,6 +40,10 @@ export const channelsSync: SyncCollection<ReplicatedChannelDoc> = {
         oc.column("id").doUpdateSet({
           name: row.name,
           description: row.description,
+          color: row.color,
+          type: row.type,
+          pinned_message_ids: row.pinned_message_ids,
+          sort_order: row.sort_order,
           created_at: row.created_at,
           updated_at: row.updated_at,
           seq: row.seq,
