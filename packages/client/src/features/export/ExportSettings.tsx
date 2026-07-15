@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
+import { strToU8, zipSync } from "fflate";
 import type {
   AttachmentCollection,
   ChannelCollection,
   MessageCollection,
 } from "../../db/database";
-import { notesToMarkdown } from "./markdown";
-import { downloadTextFile } from "./download";
+import { notesToMarkdownFiles } from "./markdown";
+import { downloadFile } from "./download";
 
 export function ExportSettings({
   messages,
@@ -26,12 +27,15 @@ export function ExportSettings({
         channels.find().exec(),
         attachments.find().exec(),
       ]);
-      const md = notesToMarkdown(
+      const files = notesToMarkdownFiles(
         m.map((d) => d.toMutableJSON()),
         c.map((d) => d.toMutableJSON()),
         a.map((d) => d.toMutableJSON()),
       );
-      downloadTextFile("aside-notes.md", md);
+      const zippable: Record<string, Uint8Array> = {};
+      for (const file of files) zippable[file.path] = strToU8(file.content);
+      const zipped = zipSync(zippable);
+      downloadFile("aside-notes.zip", zipped, "application/zip");
     } finally {
       setBusy(false);
     }
@@ -40,8 +44,8 @@ export function ExportSettings({
   return (
     <div className="rounded-lg border border-divider bg-panel p-4">
       <p className="text-sm text-muted">
-        Download all your notes as a single Markdown file. Channels become
-        headings; attachments become links.
+        Download all your notes as a zip of Markdown files, one per note,
+        organized into a folder per channel.
       </p>
       <button
         type="button"

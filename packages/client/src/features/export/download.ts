@@ -1,8 +1,8 @@
-/** Triggers a client-side download of text content as a file. */
-export function downloadTextFile(
+/** Triggers a client-side download of file content. */
+export function downloadFile(
   filename: string,
-  contents: string,
-  mimeType = "text/markdown",
+  contents: BlobPart,
+  mimeType: string,
 ): void {
   const blob = new Blob([contents], { type: mimeType });
   const url = URL.createObjectURL(blob);

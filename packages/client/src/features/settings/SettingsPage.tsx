@@ -105,7 +105,7 @@ const sections: Array<{
   {
     id: "export",
     title: "Export",
-    description: "Download all your notes as a Markdown file.",
+    description: "Download all your notes as a zip of Markdown files.",
     icon: <IconDownload className="h-5 w-5" />,
   },
   {

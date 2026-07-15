@@ -1,39 +1,27 @@
 import { DEFAULT_CHANNEL_ID } from "@aside/shared";
-import { useDrag } from "@use-gesture/react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   clearAuthToken,
   getAuthStatus,
   getAuthToken,
-  loginPassword,
   logout,
   onAuthLost,
-  setupPassword,
 } from "./auth";
 import { getDatabase, type AsideDatabase } from "./db/database";
 import { startReplication, stopReplication } from "./db/replication";
 import { DemoContext, useIsDemo } from "./demo";
 import IconInfo from "~icons/lucide/info";
-import { ChannelSidebar } from "./features/channels/ChannelSidebar";
-import { ChannelSettingsPage } from "./features/channels/ChannelSettingsPage";
-import { addMessageChannel } from "./features/channels/membership";
-import { listFeeds, type Feed } from "./features/feeds/api";
-import { useFeedUnread } from "./features/feeds/unread";
-import { LightboxProvider } from "./features/lightbox/LightboxProvider";
-import { MessageList } from "./features/messages/MessageList";
-import { SearchPalette } from "./features/search/SearchPalette";
-import { useSearchIndex } from "./features/search/searchIndex";
-import { SettingsPage } from "./features/settings/SettingsPage";
 import { useRoutedView } from "./features/routing";
-import { SETTINGS_ID, isSmartView, useNoteCounts } from "./features/views";
 import { useTheme } from "./theme";
 import { useDisplay } from "./appearance";
+import { AuthScreen } from "./AuthScreen";
+import { Workspace } from "./Workspace";
 
-type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
+export type AuthMode = "checking" | "setup" | "login" | "app" | "unreachable";
 
 /** Mobile drawer rail width; the foreground card slides this far to expose it. */
-const SIDEBAR_WIDTH = 280;
+export const SIDEBAR_WIDTH = 280;
 
 export function App() {
   const [authMode, setAuthMode] = useState<AuthMode>(() =>
@@ -200,293 +188,6 @@ function DemoBanner() {
         Public demo — this workspace resets periodically. Uploads, feeds, and AI
         are disabled.
       </span>
-    </div>
-  );
-}
-
-function Workspace({
-  db,
-  view,
-  onSelect,
-  onLogout,
-}: {
-  db: AsideDatabase;
-  view: string;
-  onSelect: (view: string) => void;
-  onLogout: () => void;
-}) {
-  const counts = useNoteCounts(db.messages, db.attachments);
-  const { channels, search } = useSearchIndex(db);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [channelSettingsId, setChannelSettingsId] = useState<string | null>(
-    null,
-  );
-  const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
-  const { unreadChannelIds, markChannelRead } = useFeedUnread(
-    db.messages,
-    db.config,
-    feeds,
-  );
-
-  const reloadFeeds = useCallback(async () => {
-    setFeeds(await listFeeds());
-  }, []);
-
-  useEffect(() => {
-    void reloadFeeds().catch(() => undefined);
-    function onFocus() {
-      void reloadFeeds().catch(() => undefined);
-    }
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [reloadFeeds]);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((open) => !open);
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Finger-tracked drawer: while dragging we drive the offset 1:1 with the
-  // finger (clamped to the rail width); on release we snap open/closed on a
-  // distance-or-velocity threshold. `drag` being non-null means a gesture is in
-  // flight, which also turns the CSS transition off so it tracks instantly.
-  const [drag, setDrag] = useState<number | null>(null);
-  const bindDrag = useDrag(
-    ({ last, movement: [mx], velocity: [vx], direction: [dx] }) => {
-      const base = sidebarOpen ? SIDEBAR_WIDTH : 0;
-      if (last) {
-        setDrag(null);
-        if (dx > 0 && (mx > 64 || vx > 0.45)) setSidebarOpen(true);
-        else if (dx < 0 && (mx < -64 || vx > 0.45)) setSidebarOpen(false);
-        return;
-      }
-      setDrag(Math.min(SIDEBAR_WIDTH, Math.max(0, base + mx)));
-    },
-    { axis: "x", filterTaps: true },
-  );
-
-  const sidebarOffset = drag ?? (sidebarOpen ? SIDEBAR_WIDTH : 0);
-  // The foreground card rounds its corners as it slides aside, matching the
-  // phone's screen radius (à la the Claude iOS app). Reset to square on desktop.
-  const cardRadius = Math.round((sidebarOffset / SIDEBAR_WIDTH) * 28);
-
-  function selectView(nextView: string) {
-    setChannelSettingsId(null);
-    if (nextView !== view && !isSmartView(nextView)) {
-      void markChannelRead(nextView);
-    }
-    onSelect(nextView);
-    setSidebarOpen(false);
-  }
-
-  const handleNavigateToNote = useCallback(
-    (channelId: string, messageId: string) => {
-      if (channelId !== view) void markChannelRead(channelId);
-      onSelect(channelId);
-      setSidebarOpen(false);
-      setFocusedMessageId(messageId);
-    },
-    [markChannelRead, onSelect, view],
-  );
-
-  const handleDropMessage = useCallback(
-    (channelId: string, messageId: string) => {
-      void db.messages
-        .findOne(messageId)
-        .exec()
-        .then((message) => {
-          if (!message) return;
-          const channelIds = addMessageChannel(message, channelId);
-          if (channelIds.join("\0") === message.channelIds.join("\0")) return;
-          return message.incrementalPatch({
-            channelIds,
-            updatedAt: Date.now(),
-          });
-        });
-    },
-    [db.messages],
-  );
-
-  // The sidebar is its own gradient plane; the feed is a separate white card that
-  // floats on top of it (a slight overlap, raised z-index + shadow) rather than
-  // sharing one rounded container — so the chrome reads as a layer behind the
-  // content. On mobile the sidebar sits underneath and the content layer slides
-  // aside to expose it.
-  return (
-    <LightboxProvider>
-      <div className="relative flex h-full overflow-hidden md:p-2">
-        <ChannelSidebar
-          collection={db.channels}
-          counts={counts}
-          unreadChannelIds={unreadChannelIds}
-          selectedView={view}
-          onSelect={selectView}
-          onOpenSettings={() => selectView(SETTINGS_ID)}
-          onOpenChannelSettings={(channelId) => {
-            setChannelSettingsId(channelId);
-            setSidebarOpen(false);
-          }}
-          onOpenSearch={() => setPaletteOpen(true)}
-          onLogout={onLogout}
-          onDropMessage={handleDropMessage}
-        />
-        <div
-          {...bindDrag()}
-          className={`relative z-10 flex h-full min-w-0 flex-1 translate-x-[var(--sidebar-offset)] touch-pan-y overflow-hidden rounded-[var(--card-radius)] md:translate-x-0 md:overflow-visible md:rounded-none ${
-            drag === null
-              ? "transition-[transform,border-radius] duration-200 ease-out"
-              : ""
-          }`}
-          style={
-            {
-              "--sidebar-offset": `${sidebarOffset}px`,
-              "--card-radius": `${cardRadius}px`,
-            } as React.CSSProperties
-          }
-        >
-          {channelSettingsId ? (
-            <ChannelSettingsPage
-              channels={db.channels}
-              channelId={channelSettingsId}
-              onOpenMenu={() => setSidebarOpen(true)}
-              onClose={(nextView) => {
-                setChannelSettingsId(null);
-                if (nextView) selectView(nextView);
-              }}
-            />
-          ) : view === SETTINGS_ID ? (
-            <SettingsPage
-              channels={db.channels}
-              config={db.config}
-              attachments={db.attachments}
-              messages={db.messages}
-              onOpenMenu={() => setSidebarOpen(true)}
-              onFeedsChanged={reloadFeeds}
-            />
-          ) : (
-            <MessageList
-              messages={db.messages}
-              channels={db.channels}
-              embeds={db.embeds}
-              attachments={db.attachments}
-              view={view}
-              counts={counts}
-              onOpenMenu={() => setSidebarOpen(true)}
-              onOpenSettings={() => selectView(SETTINGS_ID)}
-              onOpenSearch={() => setPaletteOpen(true)}
-              focusedMessageId={focusedMessageId}
-            />
-          )}
-        </div>
-        <SearchPalette
-          open={paletteOpen}
-          activeView={view}
-          channels={channels}
-          search={search}
-          onClose={() => setPaletteOpen(false)}
-          onSelectView={selectView}
-          onNavigateToNote={handleNavigateToNote}
-        />
-      </div>
-    </LightboxProvider>
-  );
-}
-
-function AuthScreen({
-  mode,
-  onRetry,
-  onAuthenticated,
-}: {
-  mode: AuthMode;
-  onRetry: () => void;
-  onAuthenticated: () => void;
-}) {
-  const isSetup = mode === "setup";
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!password || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (isSetup) await setupPassword(password);
-      else await loginPassword(password);
-      setPassword("");
-      onAuthenticated();
-    } catch {
-      setError(isSetup ? "Could not create password." : "Incorrect password.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (mode === "checking") {
-    return (
-      <div className="flex h-full items-center justify-center bg-chat text-muted">
-        Loading…
-      </div>
-    );
-  }
-
-  if (mode === "unreachable") {
-    return (
-      <div className="flex h-full items-center justify-center bg-chat px-4">
-        <div className="w-full max-w-sm rounded border border-divider bg-panel p-5 shadow">
-          <h1 className="text-lg font-semibold text-ink">Server unavailable</h1>
-          <p className="mt-2 text-sm text-muted">
-            Start the server, then try again.
-          </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mt-4 w-full rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full items-center justify-center bg-chat px-4">
-      <form
-        onSubmit={(e) => void submit(e)}
-        className="w-full max-w-sm rounded border border-divider bg-panel p-5 shadow"
-      >
-        <h1 className="text-lg font-semibold text-ink">
-          {isSetup ? "Create password" : "Log in"}
-        </h1>
-        <label className="mt-4 block text-sm font-medium text-muted">
-          Password
-          <input
-            autoFocus
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded bg-rail px-3 py-2 text-ink outline-none ring-1 ring-divider focus:ring-accent"
-          />
-        </label>
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-        <button
-          type="submit"
-          disabled={!password || busy}
-          className="mt-4 w-full rounded bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? "Working…" : isSetup ? "Create" : "Log in"}
-        </button>
-      </form>
     </div>
   );
 }
