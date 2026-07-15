@@ -161,7 +161,7 @@ export function ChannelSidebar({
   return (
     <aside className="absolute inset-y-0 left-0 z-0 flex h-full min-h-0 w-[280px] shrink-0 flex-col overflow-hidden pr-3 md:relative select-none md:w-[268px] md:pr-5">
       <header className="flex h-12 py-2 shrink-0 items-center justify-between px-4">
-        <LogoWide />
+        <LogoWide className="h-8 w-auto" />
         <div className="flex items-center gap-1">
           <button
             type="button"

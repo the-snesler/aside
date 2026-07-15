@@ -2,6 +2,7 @@ import type React from "react";
 import { useState } from "react";
 import { AuthMode } from "./App";
 import { setupPassword, loginPassword } from "./auth";
+import LogoWide from "./LogoWide";
 
 export function AuthScreen({
   mode, onRetry, onAuthenticated,
@@ -61,11 +62,12 @@ export function AuthScreen({
   }
 
   return (
-    <div className="flex h-full items-center justify-center bg-chat px-4">
+    <div className="flex h-full items-center justify-center px-4">
       <form
         onSubmit={(e) => void submit(e)}
-        className="w-full max-w-sm rounded border border-divider bg-panel p-5 shadow"
+        className="w-full max-w-sm rounded-xl border border-divider bg-chat p-12 shadow"
       >
+        <LogoWide className="max-h-16 w-auto mx-auto mb-8" />
         <h1 className="text-lg font-semibold text-ink">
           {isSetup ? "Create password" : "Welcome back"}
         </h1>
@@ -76,7 +78,8 @@ export function AuthScreen({
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded bg-rail px-3 py-2 text-ink outline-none ring-1 ring-divider focus:ring-accent" />
+            className="mt-1 w-full rounded bg-rail px-3 py-2 text-ink outline-none ring-1 ring-divider focus:ring-accent"
+          />
         </label>
         {error && <p className="mt-3 text-sm text-danger">{error}</p>}
         <button
