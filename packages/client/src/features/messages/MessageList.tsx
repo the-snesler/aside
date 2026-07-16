@@ -7,7 +7,7 @@ import {
   type MessageDoc,
 } from "@aside/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { MessageScroller, useMessageScroller } from "@shadcn/react/message-scroller";
 import type { RxDocument } from "rxdb";
 import IconCopy from "~icons/lucide/copy";
 import IconPencil from "~icons/lucide/pencil";
@@ -54,7 +54,6 @@ import {
   type TimelineRow,
 } from "./timeline";
 import type { PendingAttachment } from "./types";
-import { listComponents, type ListContext } from "./virtuosoComponents";
 
 interface Props {
   messages: MessageCollection;
@@ -69,11 +68,6 @@ interface Props {
   focusedMessageId: string | null;
 }
 
-// Virtuoso anchors prepended rows by index: we start at a large constant and
-// decrement it by the number of rows added to the front, which keeps the
-// viewport pinned to the same note as older history loads in (no scroll jump).
-const START_INDEX = 100_000;
-
 // Stable empty set so non-Photos views pass an identity-stable filter (see
 // `photoFilterIds`) and don't recreate the loaders on every attachment change.
 const EMPTY_IMAGE_IDS: Set<string> = new Set();
@@ -85,6 +79,34 @@ type ScrollTarget = {
   align: "center" | "end";
   highlight: boolean;
 };
+
+function ScrollController({
+  scrollTarget,
+  rows,
+  onHandled,
+  onHighlight,
+}: {
+  scrollTarget: ScrollTarget | null;
+  rows: TimelineRow[];
+  onHandled: () => void;
+  onHighlight: (id: string) => void;
+}) {
+  const { scrollToMessage } = useMessageScroller();
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const present = rows.some(
+      (row) => row.type === "message" && row.doc.id === scrollTarget.id,
+    );
+    if (!present) return;
+    scrollToMessage(scrollTarget.id, {
+      align: scrollTarget.align,
+      behavior: "smooth",
+    });
+    if (scrollTarget.highlight) onHighlight(scrollTarget.id);
+    onHandled();
+  }, [rows, scrollTarget, scrollToMessage, onHandled, onHighlight]);
+  return null;
+}
 
 export function MessageList({
   messages,
@@ -126,17 +148,9 @@ export function MessageList({
 
   const composerRef = useRef<MarkdownEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const oldestCursorRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const loadingOlderRef = useRef(false);
-  // Mirrors `docs` so loadOlder can measure how many rows a page prepends
-  // without recreating the callback on every change.
-  const docsRef = useRef<RxDocument<MessageDoc>[]>([]);
-  // Earliest time auto-loading older history is allowed. Set a beat after each
-  // fresh load so Virtuoso's initial measurement (which can briefly report the
-  // top) doesn't immediately trigger a history fetch on view switch.
-  const historyReadyAtRef = useRef(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [liveAfter, setLiveAfter] = useState<number | null>(null);
@@ -147,12 +161,11 @@ export function MessageList({
   // once the first document arrives. See the recovery effect below.
   const [awaitingFirstData, setAwaitingFirstData] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  // One-shot scroll request, drained by the effect below once the row exists.
+  // One-shot scroll request, drained by ScrollController once the row exists.
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
-  // Virtuoso is mounted only once the first page has resolved, so its
-  // initialTopMostItemIndex sees the real row count and opens at the newest note.
+  // The scroller mounts only once the first page has resolved, so it opens
+  // at the newest note instead of an empty viewport.
   const [initialLoadDone, setInitialLoadDone] = useState(false);
-  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
 
   useEffect(() => {
     // id → name map for the header and smart-view per-note badges.
@@ -210,20 +223,15 @@ export function MessageList({
   // views never reload on attachment changes.
   const photoFilterIds = view === PHOTOS_ID ? imageMessageIds : EMPTY_IMAGE_IDS;
 
-  useEffect(() => {
-    docsRef.current = docs;
-  }, [docs]);
-
   const loadInitial = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     oldestCursorRef.current = null;
     setDocs([]);
     setHasMore(true);
     setLiveAfter(null);
-    // Unmount Virtuoso and reset its prepend anchor so the next mount opens at
-    // the bottom of the freshly loaded view rather than restoring a stale offset.
+    // Unmount the scroller so the next mount opens at the bottom of the
+    // freshly loaded view rather than restoring a stale scroll position.
     setInitialLoadDone(false);
-    setFirstItemIndex(START_INDEX);
 
     const page = await fetchPage(messages, view, photoFilterIds, null);
     if (requestId !== requestIdRef.current) return;
@@ -232,7 +240,6 @@ export function MessageList({
     setHasMore(page.hasMore);
     setLiveAfter(page.docs.at(-1)?.createdAt ?? Date.now());
     setInitialLoadDone(true);
-    historyReadyAtRef.current = Date.now() + 250;
 
     // An empty page on a populated collection just means this view has no notes;
     // an empty page on an *empty* collection means we're a fresh client still
@@ -276,14 +283,8 @@ export function MessageList({
       const page = await fetchPage(messages, view, photoFilterIds, cursor);
       oldestCursorRef.current = page.nextCursor;
       setHasMore(page.hasMore);
-      // How many rows land at the front (older messages can add day headers).
-      // Decrementing firstItemIndex by that count tells Virtuoso the existing
-      // rows kept their absolute index, so it holds the scroll position.
-      const prev = docsRef.current;
-      const prepended =
-        rowsByDay(mergeDocs(page.docs, prev, view), view).length -
-        rowsByDay(prev, view).length;
-      if (prepended > 0) setFirstItemIndex((index) => index - prepended);
+      // Scroll position on prepend is preserved by the scroller's
+      // preserveScrollOnPrepend, keyed on each row's stable messageId.
       setDocs((current) => mergeDocs(page.docs, current, view));
     } finally {
       loadingOlderRef.current = false;
@@ -320,23 +321,20 @@ export function MessageList({
 
   const rows = useMemo(() => rowsByDay(docs, view), [docs, view]);
 
-  // Drain a one-shot scroll request once its row is present. `rows` is a
-  // dependency so a target set before the row exists (e.g. a freshly sent note
-  // still settling into the list) resolves on the render that includes it.
-  useEffect(() => {
-    if (!scrollTarget) return;
-    const index = rows.findIndex(
-      (row) => row.type === "message" && row.doc.id === scrollTarget.id,
-    );
-    if (index === -1) return;
-    virtuosoRef.current?.scrollToIndex({
-      index,
-      align: scrollTarget.align,
-      behavior: "smooth",
-    });
-    if (scrollTarget.highlight) setHighlightedId(scrollTarget.id);
-    setScrollTarget(null);
-  }, [rows, scrollTarget]);
+  // Prefetch older history once the viewport scrolls near its top. Reads the
+  // real scrollTop off the native scroll event's target instead of a ref —
+  // MessageScroller.Viewport's `ref` prop only composes under React 19 (this
+  // app is on React 18), so a ref-based IntersectionObserver never fires. The
+  // scroller's own internals (auto-scroll, prepend preservation, the jump
+  // button) use their own internal callback refs and are unaffected.
+  // loadOlder itself guards against overlap/no-more-pages/no-cursor, so no
+  // extra debounce is needed here.
+  const handleViewportScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (event.currentTarget.scrollTop < 600) void loadOlder();
+    },
+    [loadOlder],
+  );
 
   // A single timer owns clearing the highlight pulse. Keeping it separate from
   // the effects that *start* the pulse avoids the trap where re-running an
@@ -347,14 +345,6 @@ export function MessageList({
     const handle = window.setTimeout(() => setHighlightedId(null), 1500);
     return () => window.clearTimeout(handle);
   }, [highlightedId]);
-
-  const handleStartReached = useCallback(() => {
-    if (Date.now() < historyReadyAtRef.current || loadingOlderRef.current) {
-      return;
-    }
-    if (!hasMore) return;
-    void loadOlder();
-  }, [hasMore, loadOlder]);
 
   const meta = headerMeta(view, channelNames, counts);
   const currentChannel = smartView
@@ -737,63 +727,101 @@ export function MessageList({
 
       <div className="relative min-h-0 flex-1">
         {initialLoadDone && (
-          <Virtuoso<TimelineRow, ListContext>
+          <MessageScroller.Provider
             key={view}
-            ref={virtuosoRef}
-            data={rows}
-            context={{
-              loadingOlder,
-              hasMore,
-              hasRows: rows.length > 0,
-              smartView,
-              emptyState,
-            }}
-            firstItemIndex={firstItemIndex}
-            initialTopMostItemIndex={Math.max(0, rows.length - 1)}
-            followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
-            startReached={handleStartReached}
-            increaseViewportBy={600}
-            computeItemKey={(_index, row) => row.key}
-            components={listComponents}
-            className="h-full overscroll-contain"
-            itemContent={(_index, row) =>
-              row.type === "day" ? (
-                <div className="flex items-center gap-3 pb-1 pt-4 px-4">
-                  <span className="text-xs font-semibold text-muted">
-                    {row.label}
-                  </span>
-                  <span className="h-px flex-1 bg-divider" />
-                </div>
-              ) : (
-                <MessageRow
-                  doc={row.doc}
-                  smartView={smartView}
-                  channels={channelDocs}
-                  channelNames={channelNames}
-                  isEditing={editingId === row.doc.id}
-                  channelPickerOpen={channelPickerId === row.doc.id}
-                  highlighted={highlightedId === row.doc.id}
-                  embeds={embedsByMessage.get(row.doc.id)}
-                  attachments={attachmentsByMessage.get(row.doc.id)}
-                  pinned={currentPinnedSet.has(row.doc.id)}
-                  onStartEdit={startEdit}
-                  onCancelEdit={cancelEdit}
-                  onSaveEdit={saveEdit}
-                  onSaveMetadata={saveMetadata}
-                  onToggleTask={toggleTask}
-                  onCopy={copyMessage}
-                  onDelete={deleteMessage}
-                  onTogglePin={togglePin}
-                  onToggleChannelPicker={(doc) =>
-                    setChannelPickerId((id) => (id === doc.id ? null : doc.id))
-                  }
-                  onCloseChannelPicker={() => setChannelPickerId(null)}
-                  onToggleChannel={toggleMessageChannel}
-                  onLongPress={(doc) => setActionSheetId(doc.id)}
-                />
-              )
-            }
-          />
+            autoScroll
+            defaultScrollPosition="end"
+          >
+            <MessageScroller.Root className="relative flex h-full flex-col overflow-hidden">
+              <MessageScroller.Viewport
+                onScroll={handleViewportScroll}
+                className="h-full overflow-y-auto overscroll-contain"
+              >
+                <MessageScroller.Content className="flex min-h-full flex-col pb-3">
+                  {loadingOlder && (
+                    <p className="px-2 py-2 text-center text-xs text-muted">
+                      Loading older notes…
+                    </p>
+                  )}
+                  {!hasMore && rows.length > 0 && (
+                    <p className="px-2 py-2 text-center text-xs text-muted">
+                      Beginning of history
+                    </p>
+                  )}
+                  {rows.length === 0 ? (
+                    <div className="mx-auto flex max-w-sm flex-col items-center px-6 py-10 text-center">
+                      <p className="text-sm font-medium text-ink/80">
+                        {emptyState.title}
+                      </p>
+                      {emptyState.hint && (
+                        <p className="mt-2 text-sm leading-6 text-muted">
+                          {emptyState.hint}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    rows.map((row) => (
+                      <MessageScroller.Item
+                        key={row.key}
+                        messageId={
+                          row.type === "message" ? row.doc.id : undefined
+                        }
+                      >
+                        {row.type === "day" ? (
+                          <div className="flex items-center gap-3 pb-1 pt-4 px-4">
+                            <span className="text-xs font-semibold text-muted">
+                              {row.label}
+                            </span>
+                            <span className="h-px flex-1 bg-divider" />
+                          </div>
+                        ) : (
+                          <MessageRow
+                            doc={row.doc}
+                            smartView={smartView}
+                            channels={channelDocs}
+                            channelNames={channelNames}
+                            isEditing={editingId === row.doc.id}
+                            channelPickerOpen={channelPickerId === row.doc.id}
+                            highlighted={highlightedId === row.doc.id}
+                            embeds={embedsByMessage.get(row.doc.id)}
+                            attachments={attachmentsByMessage.get(row.doc.id)}
+                            pinned={currentPinnedSet.has(row.doc.id)}
+                            onStartEdit={startEdit}
+                            onCancelEdit={cancelEdit}
+                            onSaveEdit={saveEdit}
+                            onSaveMetadata={saveMetadata}
+                            onToggleTask={toggleTask}
+                            onCopy={copyMessage}
+                            onDelete={deleteMessage}
+                            onTogglePin={togglePin}
+                            onToggleChannelPicker={(doc) =>
+                              setChannelPickerId((id) =>
+                                id === doc.id ? null : doc.id,
+                              )
+                            }
+                            onCloseChannelPicker={() =>
+                              setChannelPickerId(null)
+                            }
+                            onToggleChannel={toggleMessageChannel}
+                            onLongPress={(doc) => setActionSheetId(doc.id)}
+                          />
+                        )}
+                      </MessageScroller.Item>
+                    ))
+                  )}
+                </MessageScroller.Content>
+              </MessageScroller.Viewport>
+              <MessageScroller.Button className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-divider bg-panel px-3 py-1 text-xs font-medium text-ink shadow-lg transition-opacity data-[active=false]:pointer-events-none data-[active=false]:opacity-0">
+                Jump to latest
+              </MessageScroller.Button>
+              <ScrollController
+                scrollTarget={scrollTarget}
+                rows={rows}
+                onHandled={() => setScrollTarget(null)}
+                onHighlight={setHighlightedId}
+              />
+            </MessageScroller.Root>
+          </MessageScroller.Provider>
         )}
       </div>
 

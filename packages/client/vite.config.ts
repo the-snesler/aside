@@ -34,8 +34,7 @@ export default defineConfig({
               "@floating-ui/utils",
               "@use-gesture/react",
               "@use-gesture/core",
-              "react-virtuoso",
-              "@juggle/resize-observer",
+              "@shadcn/react",
             ].includes(pkg)
           ) {
             return "vendor-react";

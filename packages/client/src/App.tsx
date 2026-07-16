@@ -1,5 +1,4 @@
 import { DEFAULT_CHANNEL_ID } from "@aside/shared";
-import type React from "react";
 import { useEffect, useState } from "react";
 import {
   clearAuthToken,
