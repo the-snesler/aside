@@ -1,4 +1,6 @@
-<img width="512" alt="image" src="https://github.com/user-attachments/assets/a8da096d-cd31-43f4-9586-386ae92a7086" />
+<p align="center">
+<img width="512" alt="image" src="https://github.com/user-attachments/assets/2d828c67-c123-4fdd-96c9-4404a7b8a68d" />
+</p>
 
 ## Aside
 
@@ -17,9 +19,10 @@ Aside is a local-first notetaking app. Sometimes, when you just want to save an 
 
 ### Screenshots
 
-<img width="1440" alt="image" src="https://github.com/user-attachments/assets/c03f0f40-6e16-453b-a9d1-525815c931f6" />
+<img width="2851" height="1688" alt="Screenshot 2026-07-18 at 21-03-51 Aside" src="https://github.com/user-attachments/assets/415edb39-6911-47c1-bd8d-7649e10004b0" />
 
-<img width="1440" alt="image" src="https://github.com/user-attachments/assets/67fcdaef-d339-4798-8837-432bd3d9df2c" />
+<img width="2851" height="1688" alt="Screenshot 2026-07-18 at 21-02-48 Aside" src="https://github.com/user-attachments/assets/f041d087-18b4-4bd6-b1fc-471e2288721c" />
+
 
 ### Self-hosting
 
